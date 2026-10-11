@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   title: "תקציב הבית",
   description: "ניהול הוצאות, תקציב וחיסכון של הבית",
   appleWebApp: { capable: true, title: "תקציב הבית" },
+  // iOS takes the home screen icon from this link rather than from the manifest.
+  icons: { apple: "/pwa-icon/192" },
 };
 
 export const viewport: Viewport = {
