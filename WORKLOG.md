@@ -56,6 +56,7 @@
 
 - **Next.js 16 שונה ממה שמכירים**: `src/proxy.ts` מחליף את middleware, ו־`cacheComponents` מחייב שכל קריאה של ההתחברות תהיה מאחורי Suspense (לכן יש `loading.tsx`). לפני שינוי קוראים את המדריך המתאים ב־`node_modules/next/dist/docs/`.
 - **vitest ב־Windows**: דורש את `@rolldown/binding-win32-x64-msvc` (מוגדר כ־optionalDependency) ואת `@types/node` בגרסה 24.
+- **Vercel חוסם בנייה כשמייל ה־commit לא משויך לחשבון GitHub** ("Deployment Blocked"). במאגר הזה הוגדר `user.email` מקומי לכתובת ה־noreply של `EliyahuYahav` ב־GitHub; commit ממחשב אחר או עם מייל אחר ייחסם שוב.
 - **`npm install` איטי מאוד** במחשב הזה, כרבע שעה להתקנה מלאה.
 - **שתי הודעות צ'אט באותה פעולה** נשמרות עם חותמות זמן מפורשות בהפרש של אלפית שנייה, אחרת הסדר ביניהן לא מובטח.
 
@@ -104,5 +105,5 @@
 - נוצר מאגר git מקומי עם commit ראשון. `.env.example` הוחרג מ־`.gitignore` כדי שייכנס למאגר; `.env.local` נשאר בחוץ. נוסף `vercel.json` שקובע את אזור הפונקציות ל־`fra1`. עוד לא נעשה: מאגר ב־GitHub, פרויקט ב־Vercel, והגדרת כתובת האתר ב־Supabase.
 - הקוד עלה ל־GitHub (`EliyahuYahav/home-budget`, פרטי) ולאתר ב־Vercel: https://home-budget-drab.vercel.app. נבדק מבחוץ: `/login` עולה, `/` ו־`/budget` מפנים ל־`/login`, `/setup` מפנה הלאה (כלומר מפתחות Supabase מוגדרים ב־Vercel), ה־manifest והאייקונים עונים, והבקשות מוגשות מ־`fra1`. לא נבדק: כניסה והרשמה באתר החי, `ANTHROPIC_API_KEY` ב־Vercel, Site URL ב־Supabase, והתקנה על הטלפון.
 - לפי דיווח המשתמשים, האתר החי עובד (כניסה, בוט, התקנה). שלב 1 הושלם.
-- אייפון: ההתקנה נעשית מתפריט השיתוף (ולא משלוש הנקודות). נוסף `apple-touch-icon` ב־`src/app/layout.tsx` שמפנה ל־`/pwa-icon/192`. התג נבדק ב־dev; לא נבדק על אייפון אמיתי.
+- אייפון: ההתקנה נעשית מתפריט השיתוף (ולא משלוש הנקודות). נוסף `apple-touch-icon` ב־`src/app/layout.tsx` שמפנה ל־`/pwa-icon/192`. התג נבדק ב־dev ובאתר החי; לא נבדק על אייפון אמיתי.
 - פתוח: ב־dev נרשמת שגיאה על `/setup` ‏(`Could not validate instant ... NEXT_REDIRECT`), ההפניה עצמה עובדת. "Confirm email" דולק בפרויקט ה־Supabase.
