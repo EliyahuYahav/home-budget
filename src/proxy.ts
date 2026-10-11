@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from "./lib/env";
 
-const PUBLIC_PATHS = ["/login", "/setup"];
+const PUBLIC_PATHS = ["/login"];
 
 // Refreshes the Supabase session cookie on every request and sends signed-out
 // visitors to /login.
@@ -13,6 +13,9 @@ export async function proxy(request: NextRequest) {
     if (pathname === "/setup") return NextResponse.next();
     return NextResponse.redirect(new URL("/setup", request.url));
   }
+
+  // The setup instructions are only for a project without keys.
+  if (pathname === "/setup") return NextResponse.redirect(new URL("/", request.url));
 
   let response = NextResponse.next({ request });
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {

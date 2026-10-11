@@ -1,10 +1,8 @@
-import { redirect } from "next/navigation";
 import { Card } from "@/components/ui";
-import { isSupabaseConfigured } from "@/lib/env";
 
-// Shown only while the Supabase keys are missing from .env.local.
+// Shown only while the Supabase keys are missing from .env.local; src/proxy.ts
+// sends visitors away from here once they are set.
 export default function SetupPage() {
-  if (isSupabaseConfigured()) redirect("/");
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-4 p-4">
       <h1 className="text-2xl font-bold">נשאר לחבר את מסד הנתונים</h1>
