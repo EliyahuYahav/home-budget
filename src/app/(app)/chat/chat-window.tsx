@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { sendChatMessage } from "@/app/actions";
+import { sendChatMessage, undoChatEntries } from "@/app/actions";
 import { BotText } from "@/components/bot-text";
 import { SendIcon } from "@/components/icons";
 import { dayLabel, todayISO } from "@/lib/dates";
@@ -31,6 +31,9 @@ export function ChatWindow({
   /** Text of the message being sent, shown right away while the bot works. */
   const [pending, setPending] = useState("");
   const [error, setError] = useState("");
+  /** Rows logged by the latest bot answer, which can still be taken back. */
+  const [undoable, setUndoable] = useState<{ messageId: string; ids: string[] } | null>(null);
+  const [undoing, setUndoing] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const sending = pending !== "";
 
@@ -45,14 +48,30 @@ export function ChatWindow({
     setError("");
     setDraft("");
     try {
-      const { userMessage, botMessage } = await sendChatMessage(content);
+      const { userMessage, botMessage, entryIds } = await sendChatMessage(content);
       setMessages((current) => [...current, userMessage, botMessage]);
+      setUndoable(entryIds.length > 0 ? { messageId: botMessage.id, ids: entryIds } : null);
     } catch {
       // Put the text back so nothing the user typed is lost.
       setDraft(content);
       setError("ההודעה לא נשלחה. בדקו את החיבור ונסו שוב.");
     } finally {
       setPending("");
+    }
+  }
+
+  async function undo() {
+    if (!undoable || undoing) return;
+    setUndoing(true);
+    setError("");
+    try {
+      const botMessage = await undoChatEntries(undoable.ids);
+      setMessages((current) => [...current, botMessage]);
+      setUndoable(null);
+    } catch {
+      setError("הביטול לא הצליח. אפשר למחוק את השורה במסך ההוצאות.");
+    } finally {
+      setUndoing(false);
     }
   }
 
@@ -109,6 +128,18 @@ export function ChatWindow({
                   </span>
                 </div>
               </div>
+              {undoable?.messageId === message.id && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void undo()}
+                    disabled={undoing}
+                    className="rounded-full px-3 py-1 text-sm font-bold text-accent underline disabled:opacity-50"
+                  >
+                    {undoing ? "מבטל…" : "ביטול הרישום"}
+                  </button>
+                </div>
+              )}
             </li>
           );
         })}

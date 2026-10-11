@@ -253,7 +253,7 @@ function describeEntry(entry: ParsedEntry, today: string): string {
 
 export async function sendChatMessage(
   message: string,
-): Promise<{ userMessage: ChatMessage; botMessage: ChatMessage }> {
+): Promise<{ userMessage: ChatMessage; botMessage: ChatMessage; entryIds: string[] }> {
   const ctx = await requireContext();
   const content = message.trim().slice(0, 500);
   if (!content) throw new Error("empty message");
@@ -287,9 +287,10 @@ export async function sendChatMessage(
 
   const idByName = new Map(active.map((c) => [c.name, c.id]));
   let reply = interpretation.reply;
+  let entryIds: string[] = [];
 
   if (interpretation.entries.length > 0) {
-    const { error } = await ctx.supabase.from("transactions").insert(
+    const { data: saved, error } = await ctx.supabase.from("transactions").insert(
       interpretation.entries.map((entry) => ({
         household_id: ctx.household.id,
         type: entry.type,
@@ -299,8 +300,9 @@ export async function sendChatMessage(
         occurred_on: entry.date,
         source: "chat",
       })),
-    );
+    ).select("id");
     if (error) throw new Error(error.message);
+    entryIds = (saved ?? []).map((row) => row.id as string);
 
     // Confirmation is built from the saved data, not from the model's wording.
     const after = await getMonthData(ctx, month);
@@ -345,5 +347,40 @@ export async function sendChatMessage(
   revalidateApp();
   const userMessage = data.find((m) => m.role === "user") as ChatMessage;
   const botMessage = data.find((m) => m.role === "bot") as ChatMessage;
-  return { userMessage, botMessage };
+  return { userMessage, botMessage, entryIds };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Deletes rows the bot has just logged, when it understood the message wrongly. */
+export async function undoChatEntries(ids: string[]): Promise<ChatMessage> {
+  const ctx = await requireContext();
+  const valid = ids.filter((id) => typeof id === "string" && UUID.test(id)).slice(0, 20);
+  if (valid.length === 0) throw new Error("nothing to undo");
+
+  const { data: removed, error } = await ctx.supabase
+    .from("transactions")
+    .delete()
+    .in("id", valid)
+    .eq("household_id", ctx.household.id)
+    .eq("source", "chat")
+    .select("id");
+  if (error) throw new Error(error.message);
+
+  const count = removed?.length ?? 0;
+  const content =
+    count === 0
+      ? "לא נמצאו שורות לביטול. ייתכן שכבר נמחקו."
+      : count === 1
+        ? "בוטל. השורה נמחקה."
+        : `בוטל. ${count} שורות נמחקו.`;
+  const { data, error: messageError } = await ctx.supabase
+    .from("chat_messages")
+    .insert({ household_id: ctx.household.id, role: "bot", content })
+    .select("id, user_id, role, content, created_at")
+    .single();
+  if (messageError || !data) throw new Error(messageError?.message ?? "failed to save message");
+
+  revalidateApp();
+  return data as ChatMessage;
 }

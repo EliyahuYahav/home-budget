@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { sendChatMessage } from "@/app/actions";
+import { sendChatMessage, undoChatEntries } from "@/app/actions";
 import { BotText } from "./bot-text";
 import { SendIcon } from "./icons";
 
@@ -13,6 +13,9 @@ export function QuickAdd() {
   const [sending, setSending] = useState(false);
   const [reply, setReply] = useState("");
   const [error, setError] = useState("");
+  /** Rows the last answer logged, which can still be taken back. */
+  const [undoIds, setUndoIds] = useState<string[]>([]);
+  const [undoing, setUndoing] = useState(false);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -21,10 +24,12 @@ export function QuickAdd() {
     setSending(true);
     setError("");
     setReply("");
+    setUndoIds([]);
     setDraft("");
     try {
-      const { botMessage } = await sendChatMessage(content);
+      const { botMessage, entryIds } = await sendChatMessage(content);
       setReply(botMessage.content);
+      setUndoIds(entryIds);
       // The numbers on this screen come from the server; fetch them again.
       router.refresh();
     } catch {
@@ -33,6 +38,22 @@ export function QuickAdd() {
       setError("ההודעה לא נשלחה. בדקו את החיבור ונסו שוב.");
     } finally {
       setSending(false);
+    }
+  }
+
+  async function undo() {
+    if (undoIds.length === 0 || undoing) return;
+    setUndoing(true);
+    setError("");
+    try {
+      const botMessage = await undoChatEntries(undoIds);
+      setReply(botMessage.content);
+      setUndoIds([]);
+      router.refresh();
+    } catch {
+      setError("הביטול לא הצליח. אפשר למחוק את השורה במסך ההוצאות.");
+    } finally {
+      setUndoing(false);
     }
   }
 
@@ -70,9 +91,21 @@ export function QuickAdd() {
       </form>
       <div aria-live="polite">
         {reply && (
-          <p className="whitespace-pre-line rounded-3xl bg-accent-soft p-4 text-[0.95rem] leading-relaxed">
-            <BotText text={reply} />
-          </p>
+          <div className="space-y-2 rounded-3xl bg-accent-soft p-4 text-[0.95rem] leading-relaxed">
+            <p className="whitespace-pre-line">
+              <BotText text={reply} />
+            </p>
+            {undoIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => void undo()}
+                disabled={undoing}
+                className="font-bold text-accent underline disabled:opacity-50"
+              >
+                {undoing ? "מבטל…" : "ביטול הרישום"}
+              </button>
+            )}
+          </div>
         )}
         {error && (
           <p role="alert" className="rounded-3xl bg-danger-soft p-4 text-sm text-danger">
