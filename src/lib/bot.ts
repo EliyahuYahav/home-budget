@@ -6,7 +6,7 @@ import { isClaudeConfigured } from "./env";
 import { parseMessageFallback } from "./parse-fallback";
 import type { ParsedEntry } from "./types";
 
-const MODEL = "claude-haiku-4-5";
+const MODEL = "claude-haiku-5-5";
 
 export interface BotInterpretation {
   entries: ParsedEntry[];
@@ -18,10 +18,10 @@ export interface BotInterpretation {
 const SYSTEM_PROMPT = `You are the bookkeeping assistant inside a household budget app used by a couple in Israel. They send you short, informal Hebrew messages from their phones, usually right after paying for something, and the app turns what you extract into rows in their shared expense list. Accuracy matters more than cleverness: a wrong amount or category quietly distorts their monthly budget.
 
 What to extract into "entries":
-- Every expense or income the message reports. One message can contain several ("פיצה 60, קפה 14").
-- "type" is "income" for money they received (salary, bonus, refund, gift, sold something) and "expense" for everything else. Moving money into savings or investments is an "expense" in the matching savings category.
+- Every expense or income the message reports. One message can contain several ("פיצה 60, קפה 14"). Log it even when the month figures already show the same amount in that category: people fill the tank or shop for the same sum more than once, and those figures are only there for answering questions.
+- "type" is "income" only when the message says money came in to them: a salary, a bonus, a refund, something they sold, or a gift they were given ("קיבלתי מתנה 500"). Everything else is an "expense", including a gift they bought or gave: "מתנה ליום הולדת 150" is money they spent on a present. Moving money into savings or investments is an "expense" in the matching savings category.
 - "amount" is in shekels, always positive.
-- "category" must be the best fit from the allowed list. Use null for income, and for an expense only when nothing in the list reasonably fits; do not force a poor match.
+- "category" is the number of the category, from the numbered list sent with each message, that someone keeping this household's books would file the purchase under. Most everyday spending has an obvious home: a meal or coffee out goes under eating out, groceries under the supermarket, shoes or clothes under clothing, a present bought for someone under gifts, fuel under fuel. The list was written by the couple and has gaps, so use null when no category covers that kind of spending at all, rather than stretching an unrelated one: with no grooming category a haircut gets null, not bank fees, and the app files it as uncategorized for them to sort out. Income always gets null.
 - "description" is a few Hebrew words saying what it was (the shop or item), without the amount or the date.
 - "date" is YYYY-MM-DD. Use today's date unless the message says otherwise ("אתמול", "שלשום", "ביום ראשון", a specific date). A weekday name means the most recent such day.
 
@@ -33,36 +33,22 @@ What to put in "reply":
 
 Write replies in plain, warm Hebrew, addressing them in the plural, with amounts written like ₪230.`;
 
-function buildSchema(categoryNames: string[]) {
-  const category =
-    categoryNames.length > 0
-      ? z.enum(categoryNames as [string, ...string[]]).nullable()
-      : z.null();
-  return z.object({
-    entries: z.array(
-      z.object({
-        type: z.enum(["expense", "income"]),
-        amount: z.number(),
-        category,
-        description: z.string(),
-        date: z.string(),
-      }),
-    ),
-    reply: z.string(),
-  });
-}
-
-/**
- * zodOutputFormat rewrites the schema for the API and, in the SDK version in use,
- * moves `enum` into the field description, so the category list is only a hint
- * and Claude can answer with a name that is not in it. Send Zod's own JSON
- * schema instead, which keeps the enum, and keep the helper's parsing.
- */
-function outputFormat(schema: ReturnType<typeof buildSchema>) {
-  const jsonSchema: Record<string, unknown> = { ...z.toJSONSchema(schema) };
-  delete jsonSchema.$schema;
-  return { ...zodOutputFormat(schema), schema: jsonSchema };
-}
+// Categories are chosen by their number in a list sent with the message, not by
+// name: asked for the Hebrew name, Claude returned near misses ("חשמל" for
+// "חשמל ומים") that failed validation, and constraining the output to the exact
+// names made it pick unrelated ones.
+const schema = z.object({
+  entries: z.array(
+    z.object({
+      type: z.enum(["expense", "income"]),
+      amount: z.number(),
+      category: z.number().nullable(),
+      description: z.string(),
+      date: z.string(),
+    }),
+  ),
+  reply: z.string(),
+});
 
 function fallback(text: string, categoryNames: string[], today: string): BotInterpretation {
   const entries = parseMessageFallback(text, categoryNames, today);
@@ -89,19 +75,22 @@ export async function interpretMessage(input: {
   const { text, categoryNames, today, monthContext } = input;
   if (!isClaudeConfigured()) return fallback(text, categoryNames, today);
 
+  const categoryList =
+    categoryNames.map((name, i) => `${i + 1}. ${name}`).join("\n") || "(none defined)";
+
   try {
     const client = new Anthropic();
     const response = await client.messages.parse({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [
         {
           role: "user",
-          content: `Today's date: ${today}\n\nThis month so far:\n${monthContext}\n\nMessage from the user:\n${text}`,
+          content: `Today's date: ${today}\n\nCategories:\n${categoryList}\n\nThis month so far:\n${monthContext}\n\nMessage from the user:\n${text}`,
         },
       ],
-      output_config: { format: outputFormat(buildSchema(categoryNames)) },
+      output_config: { format: zodOutputFormat(schema) },
     });
 
     const parsed = response.parsed_output;
@@ -112,7 +101,8 @@ export async function interpretMessage(input: {
       .map((e) => ({
         type: e.type,
         amount: Math.round(e.amount * 100) / 100,
-        category: e.type === "income" ? null : e.category,
+        // A number outside the list counts as no category.
+        category: e.type === "income" ? null : (categoryNames[(e.category ?? 0) - 1] ?? null),
         description: e.description.trim().slice(0, 200),
         date: isValidDate(e.date) ? e.date : today,
       }));
