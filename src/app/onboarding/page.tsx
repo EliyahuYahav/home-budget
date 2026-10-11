@@ -17,7 +17,7 @@ export default async function OnboardingPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 p-4">
       <header>
-        <h1 className="text-2xl font-bold">כמעט שם</h1>
+        <h1 className="font-display text-4xl font-bold">כמעט שם</h1>
         <p className="mt-1 text-muted">
           פותחים משק בית חדש, או מצטרפים לזה שבן או בת הזוג כבר פתחו.
         </p>

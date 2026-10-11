@@ -4,7 +4,9 @@ import {
   signOut,
   updateDisplayName,
 } from "@/app/actions";
-import { Card, Money, PageTitle } from "@/components/ui";
+import { CopyCode } from "@/components/copy-code";
+import { SubmitButton } from "@/components/submit-button";
+import { Card, Money, PageTitle, SectionTitle } from "@/components/ui";
 import { getMembers, getRecurringIncomes, requireContext } from "@/lib/data";
 import { isClaudeConfigured } from "@/lib/env";
 
@@ -19,8 +21,8 @@ export default async function SettingsPage() {
 
       <Card className="space-y-3">
         <div className="flex items-baseline justify-between">
-          <h2 className="font-semibold">הכנסות קבועות</h2>
-          <Money amount={totalIncome} className="text-sm" />
+          <SectionTitle>הכנסות קבועות</SectionTitle>
+          <Money amount={totalIncome} className="font-bold" />
         </div>
         <p className="text-sm text-muted">
           משכורות וכל מה שנכנס כל חודש. הכנסה חד־פעמית (בונוס, החזר) רושמים בבוט או במסך ההוצאות.
@@ -28,13 +30,15 @@ export default async function SettingsPage() {
         {incomes.length > 0 && (
           <ul className="divide-y divide-line">
             {incomes.map((income) => (
-              <li key={income.id} className="flex items-center justify-between gap-3 py-2">
+              <li key={income.id} className="flex items-center justify-between gap-3 py-2.5">
                 <span>{income.name}</span>
                 <span className="flex items-center gap-3">
-                  <Money amount={income.amount} />
+                  <Money amount={income.amount} className="font-bold" />
                   <form action={deleteRecurringIncome}>
                     <input type="hidden" name="id" value={income.id} />
-                    <button className="text-sm text-danger underline">הסרה</button>
+                    <SubmitButton className="text-sm font-semibold text-danger underline" pendingLabel="מסיר…">
+                      הסרה
+                    </SubmitButton>
                   </form>
                 </span>
               </li>
@@ -43,25 +47,25 @@ export default async function SettingsPage() {
         )}
         <form action={addRecurringIncome} className="grid grid-cols-2 gap-3">
           <label className="space-y-1">
-            <span className="text-sm font-medium">שם</span>
+            <span className="text-sm font-semibold">שם</span>
             <input className="field" name="name" placeholder="משכורת" required />
           </label>
           <label className="space-y-1">
-            <span className="text-sm font-medium">סכום חודשי</span>
+            <span className="text-sm font-semibold">סכום חודשי</span>
             <input className="field num" name="amount" inputMode="decimal" required />
           </label>
-          <button className="btn col-span-2">הוספת הכנסה</button>
+          <SubmitButton className="btn col-span-2" pendingLabel="מוסיף…">
+            הוספת הכנסה
+          </SubmitButton>
         </form>
       </Card>
 
       <Card className="space-y-3">
-        <h2 className="font-semibold">{ctx.household.name}</h2>
-        <p className="text-sm text-muted">
-          חברים: {members.map((m) => m.display_name).join(", ")}
-        </p>
-        <div>
-          <p className="text-sm text-muted">קוד הזמנה לבן או בת הזוג</p>
-          <p className="num text-2xl font-bold tracking-widest">{ctx.household.invite_code}</p>
+        <SectionTitle>{ctx.household.name}</SectionTitle>
+        <p className="text-muted">חברים: {members.map((m) => m.display_name).join(", ")}</p>
+        <div className="space-y-2 rounded-2xl bg-accent-soft p-4">
+          <p className="text-sm font-semibold">קוד הזמנה לבן או בת הזוג</p>
+          <CopyCode code={ctx.household.invite_code} />
           <p className="text-sm text-muted">
             {'נרשמים באתר עם אימייל משלהם, ובמסך הפתיחה בוחרים "הצטרפות עם קוד הזמנה".'}
           </p>
@@ -69,21 +73,23 @@ export default async function SettingsPage() {
       </Card>
 
       <Card className="space-y-3">
-        <h2 className="font-semibold">החשבון שלי</h2>
+        <SectionTitle>החשבון שלי</SectionTitle>
         <form action={updateDisplayName} className="flex items-end gap-3">
           <label className="flex-1 space-y-1">
-            <span className="text-sm font-medium">השם שלי</span>
+            <span className="text-sm font-semibold">השם שלי</span>
             <input className="field" name="displayName" defaultValue={ctx.displayName} required />
           </label>
-          <button className="btn btn-quiet">שמירה</button>
+          <SubmitButton className="btn btn-quiet">שמירה</SubmitButton>
         </form>
         <p className="text-sm text-muted">
           {isClaudeConfigured()
             ? "הבוט מחובר ל־Claude."
-            : "הבוט פועל בזיהוי בסיסי. כדי לחבר את Claude מוסיפים ANTHROPIC_API_KEY לקובץ ‎.env.local."}
+            : "הבוט פועל בזיהוי בסיסי, בלי Claude."}
         </p>
         <form action={signOut}>
-          <button className="btn btn-danger w-full">יציאה מהחשבון</button>
+          <SubmitButton className="btn btn-danger w-full" pendingLabel="יוצא…">
+            יציאה מהחשבון
+          </SubmitButton>
         </form>
       </Card>
     </>

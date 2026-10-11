@@ -25,6 +25,7 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
         transactions={transactions}
         categories={categories}
         memberNames={Object.fromEntries(members.map((m) => [m.user_id, m.display_name]))}
+        today={today}
         defaultDate={monthOf(today) === month ? today : `${month}-01`}
       />
     </>

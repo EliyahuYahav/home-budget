@@ -16,18 +16,21 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 p-4">
-      <header>
-        <h1 className="text-3xl font-bold">תקציב הבית</h1>
-        <p className="mt-1 text-muted">כותבים מה הוצאתם, והשאר מסתדר לבד.</p>
+      <header className="rounded-[2rem] bg-hero p-6 text-hero-ink">
+        <p className="font-display text-6xl font-bold leading-none" aria-hidden="true">
+          ₪
+        </p>
+        <h1 className="mt-4 font-display text-4xl font-bold">תקציב הבית</h1>
+        <p className="mt-1 text-hero-ink/85">כותבים מה הוצאתם, והשאר מסתדר לבד.</p>
       </header>
 
       <form action={isSignIn ? signInAction : signUpAction} className="space-y-3">
         <label className="block space-y-1">
-          <span className="text-sm font-medium">אימייל</span>
+          <span className="text-sm font-semibold">אימייל</span>
           <input className="field" name="email" type="email" autoComplete="email" dir="ltr" required />
         </label>
         <label className="block space-y-1">
-          <span className="text-sm font-medium">סיסמה</span>
+          <span className="text-sm font-semibold">סיסמה</span>
           <input
             className="field"
             name="password"
@@ -37,27 +40,28 @@ export default function LoginPage() {
             dir="ltr"
             required
           />
+          {!isSignIn && <span className="block text-sm text-muted">8 תווים לפחות.</span>}
         </label>
 
         {state.error && (
-          <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">
+          <p role="alert" className="rounded-2xl bg-danger-soft p-3 text-sm text-danger">
             {state.error}
           </p>
         )}
         {state.message && (
-          <p role="status" className="rounded-xl bg-accent-soft p-3 text-sm">
+          <p role="status" className="rounded-2xl bg-good-soft p-3 text-sm">
             {state.message}
           </p>
         )}
 
         <button className="btn w-full" disabled={pending}>
-          {isSignIn ? "כניסה" : "הרשמה"}
+          {pending ? (isSignIn ? "נכנס…" : "נרשם…") : isSignIn ? "כניסה" : "הרשמה"}
         </button>
       </form>
 
       <button
         type="button"
-        className="text-sm text-accent underline"
+        className="font-semibold text-accent"
         onClick={() => setMode(isSignIn ? "signUp" : "signIn")}
       >
         {isSignIn ? "אין לך חשבון? להרשמה" : "יש לך חשבון? לכניסה"}

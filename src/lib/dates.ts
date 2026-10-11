@@ -65,3 +65,14 @@ export function monthLabel(month: string): string {
 export function shortDate(dateISO: string): string {
   return `${Number(dateISO.slice(8, 10))}.${Number(dateISO.slice(5, 7))}`;
 }
+
+const HEBREW_WEEKDAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+
+/** Heading for a day in a list: "היום", "אתמול", or "יום שלישי 6.10". */
+export function dayLabel(dateISO: string, today: string): string {
+  if (dateISO === today) return "היום";
+  if (dateISO === shiftDate(today, -1)) return "אתמול";
+  const weekday = HEBREW_WEEKDAYS[new Date(`${dateISO}T00:00:00Z`).getUTCDay()];
+  const prefix = weekday === "שבת" ? "שבת" : `יום ${weekday}`;
+  return `${prefix} ${shortDate(dateISO)}`;
+}

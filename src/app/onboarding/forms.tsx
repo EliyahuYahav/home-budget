@@ -8,7 +8,7 @@ const initial: FormState = {};
 function ErrorNote({ state }: { state: FormState }) {
   if (!state.error) return null;
   return (
-    <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">
+    <p role="alert" className="rounded-2xl bg-danger-soft p-3 text-sm text-danger">
       {state.error}
     </p>
   );
@@ -20,14 +20,14 @@ export function OnboardingForms() {
 
   return (
     <div className="space-y-4">
-      <form action={createAction} className="space-y-3 rounded-2xl border border-line bg-card p-4">
-        <h2 className="font-semibold">משק בית חדש</h2>
+      <form action={createAction} className="space-y-3 rounded-3xl bg-card p-4 shadow-card">
+        <h2 className="text-lg font-bold">משק בית חדש</h2>
         <label className="block space-y-1">
-          <span className="text-sm font-medium">השם שלך</span>
+          <span className="text-sm font-semibold">השם שלך</span>
           <input className="field" name="displayName" autoComplete="given-name" required />
         </label>
         <label className="block space-y-1">
-          <span className="text-sm font-medium">שם למשק הבית</span>
+          <span className="text-sm font-semibold">שם למשק הבית</span>
           <input className="field" name="householdName" placeholder="הבית שלנו" />
         </label>
         <p className="text-sm text-muted">
@@ -35,24 +35,24 @@ export function OnboardingForms() {
         </p>
         <ErrorNote state={createState} />
         <button className="btn w-full" disabled={creating || joining}>
-          פתיחת משק בית
+          {creating ? "פותח…" : "פתיחת משק בית"}
         </button>
       </form>
 
-      <form action={joinAction} className="space-y-3 rounded-2xl border border-line bg-card p-4">
-        <h2 className="font-semibold">הצטרפות עם קוד הזמנה</h2>
+      <form action={joinAction} className="space-y-3 rounded-3xl bg-card p-4 shadow-card">
+        <h2 className="text-lg font-bold">הצטרפות עם קוד הזמנה</h2>
         <label className="block space-y-1">
-          <span className="text-sm font-medium">השם שלך</span>
+          <span className="text-sm font-semibold">השם שלך</span>
           <input className="field" name="displayName" autoComplete="given-name" required />
         </label>
         <label className="block space-y-1">
-          <span className="text-sm font-medium">קוד הזמנה</span>
+          <span className="text-sm font-semibold">קוד הזמנה</span>
           <input className="field num" name="inviteCode" autoCapitalize="characters" required />
         </label>
         <p className="text-sm text-muted">הקוד מופיע במסך ההגדרות אצל מי שפתח את משק הבית.</p>
         <ErrorNote state={joinState} />
         <button className="btn btn-quiet w-full" disabled={creating || joining}>
-          הצטרפות
+          {joining ? "מצטרף…" : "הצטרפות"}
         </button>
       </form>
     </div>

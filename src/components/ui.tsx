@@ -2,10 +2,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { formatILS } from "@/lib/budget";
 import { monthLabel, shiftMonth } from "@/lib/dates";
+import { ChevronEnd, ChevronStart } from "./icons";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-2xl border border-line bg-card p-4 ${className}`}>{children}</section>
+    <section className={`rounded-3xl bg-card p-4 shadow-card ${className}`}>{children}</section>
   );
 }
 
@@ -14,10 +15,14 @@ export function Money({ amount, className = "" }: { amount: number; className?: 
 }
 
 export function PageTitle({ children }: { children: ReactNode }) {
-  return <h1 className="text-xl font-bold">{children}</h1>;
+  return <h1 className="font-display text-3xl font-bold">{children}</h1>;
 }
 
-const BAR_COLORS = { ok: "bg-accent", warning: "bg-warn", over: "bg-danger" };
+export function SectionTitle({ children }: { children: ReactNode }) {
+  return <h2 className="text-lg font-bold">{children}</h2>;
+}
+
+const BAR_COLORS = { ok: "bg-accent", good: "bg-good", warning: "bg-warn", over: "bg-danger" };
 
 export function ProgressBar({
   ratio,
@@ -43,18 +48,26 @@ export function ProgressBar({
   );
 }
 
-/** Previous / next month links around the current month's name. */
+/** Previous / next month arrows around the current month's name. */
 export function MonthNav({ month, basePath }: { month: string; basePath: string }) {
-  const link = "rounded-lg border border-line px-3 py-1.5 text-sm";
+  const link = "flex size-11 items-center justify-center rounded-full bg-card shadow-card";
   return (
     <nav aria-label="בחירת חודש" className="flex items-center justify-between gap-2">
-      <Link className={link} href={`${basePath}?m=${shiftMonth(month, -1)}`}>
-        החודש הקודם
+      <Link className={link} href={`${basePath}?m=${shiftMonth(month, -1)}`} aria-label="החודש הקודם">
+        <ChevronStart />
       </Link>
-      <span className="font-semibold">{monthLabel(month)}</span>
-      <Link className={link} href={`${basePath}?m=${shiftMonth(month, 1)}`}>
-        החודש הבא
+      <span className="text-lg font-bold">{monthLabel(month)}</span>
+      <Link className={link} href={`${basePath}?m=${shiftMonth(month, 1)}`} aria-label="החודש הבא">
+        <ChevronEnd />
       </Link>
     </nav>
+  );
+}
+
+export function EmptyNote({ children }: { children: ReactNode }) {
+  return (
+    <p className="rounded-3xl border border-dashed border-line p-5 text-center text-muted">
+      {children}
+    </p>
   );
 }

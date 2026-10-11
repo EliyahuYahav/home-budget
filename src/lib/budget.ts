@@ -1,4 +1,4 @@
-import { daysLeftInMonth } from "./dates";
+import { daysInMonth, daysLeftInMonth } from "./dates";
 import type { Category, RecurringIncome, Transaction } from "./types";
 
 export interface CategoryStatus {
@@ -119,6 +119,26 @@ export function summarizeMonth(input: {
     safeToSpendToday: round2(safeToSpendToday),
     categories: statuses,
   };
+}
+
+/**
+ * Day-to-day spending for each day of the month (index 0 is the 1st): expenses
+ * outside savings and fixed bills, which is what the daily allowance covers.
+ */
+export function dailySpending(
+  month: string,
+  transactions: Transaction[],
+  categories: Category[],
+): number[] {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const days = new Array<number>(daysInMonth(month)).fill(0);
+  for (const t of transactions) {
+    if (t.type !== "expense" || !t.occurred_on.startsWith(month)) continue;
+    const category = t.category_id ? byId.get(t.category_id) : undefined;
+    if (category && (category.kind === "saving" || category.is_fixed)) continue;
+    days[Number(t.occurred_on.slice(8, 10)) - 1] += t.amount;
+  }
+  return days.map(round2);
 }
 
 export function formatILS(amount: number): string {

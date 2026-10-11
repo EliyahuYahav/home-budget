@@ -10,8 +10,10 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     dir: "rtl",
     lang: "he",
-    background_color: "#f5f4ef",
-    theme_color: "#1f6f54",
+    background_color: "#eef0f6",
+    theme_color: "#2433b8",
+    // Long-press on the installed icon: jump straight to logging an expense.
+    shortcuts: [{ name: "רישום הוצאה", url: "/chat" }],
     icons: [
       { src: "/pwa-icon/192", sizes: "192x192", type: "image/png" },
       { src: "/pwa-icon/512", sizes: "512x512", type: "image/png" },
