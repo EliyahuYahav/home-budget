@@ -1,0 +1,238 @@
+-- Home Budget — database schema for Supabase (Postgres).
+-- Run this whole file once in the Supabase dashboard: SQL Editor -> New query -> Run.
+-- It is safe to re-run: every statement is idempotent.
+
+-- ---------------------------------------------------------------------------
+-- Tables
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.households (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  invite_code text not null unique default upper(substr(md5(gen_random_uuid()::text), 1, 8)),
+  created_at  timestamptz not null default now()
+);
+
+-- One household per user (unique on user_id) keeps every query simple.
+create table if not exists public.household_members (
+  household_id uuid not null references public.households (id) on delete cascade,
+  user_id      uuid not null unique references auth.users (id) on delete cascade,
+  display_name text not null,
+  joined_at    timestamptz not null default now(),
+  primary key (household_id, user_id)
+);
+
+-- kind = 'saving' marks "pay yourself first" lines: their budget is set aside
+-- at the start of the month, before anything is available to spend.
+-- is_fixed marks bills (rent, internet...) whose unpaid part is reserved when
+-- computing how much is safe to spend today.
+create table if not exists public.categories (
+  id             uuid primary key default gen_random_uuid(),
+  household_id   uuid not null references public.households (id) on delete cascade,
+  name           text not null,
+  kind           text not null default 'expense' check (kind in ('expense', 'saving')),
+  is_fixed       boolean not null default false,
+  monthly_budget numeric(12, 2) not null default 0 check (monthly_budget >= 0),
+  sort_order     int not null default 0,
+  archived       boolean not null default false,
+  unique (household_id, name)
+);
+
+-- Fixed monthly incomes (salaries). One-off incomes are transactions of type 'income'.
+create table if not exists public.recurring_incomes (
+  id           uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households (id) on delete cascade,
+  name         text not null,
+  amount       numeric(12, 2) not null check (amount > 0),
+  created_at   timestamptz not null default now()
+);
+
+create table if not exists public.transactions (
+  id           uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households (id) on delete cascade,
+  user_id      uuid references auth.users (id) on delete set null default auth.uid(),
+  type         text not null check (type in ('expense', 'income')),
+  amount       numeric(12, 2) not null check (amount > 0),
+  category_id  uuid references public.categories (id) on delete set null,
+  description  text not null default '',
+  occurred_on  date not null,
+  source       text not null default 'manual' check (source in ('manual', 'chat')),
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists transactions_household_date_idx
+  on public.transactions (household_id, occurred_on desc);
+
+create table if not exists public.chat_messages (
+  id           uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households (id) on delete cascade,
+  user_id      uuid references auth.users (id) on delete set null default auth.uid(),
+  role         text not null check (role in ('user', 'bot')),
+  content      text not null,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists chat_messages_household_idx
+  on public.chat_messages (household_id, created_at desc);
+
+-- ---------------------------------------------------------------------------
+-- Row level security: a user sees and changes only their own household's rows.
+-- ---------------------------------------------------------------------------
+
+-- SECURITY DEFINER so the policies on household_members don't recurse into themselves.
+create or replace function public.is_household_member(hid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.household_members
+    where household_id = hid and user_id = auth.uid()
+  );
+$$;
+
+alter table public.households        enable row level security;
+alter table public.household_members enable row level security;
+alter table public.categories        enable row level security;
+alter table public.recurring_incomes enable row level security;
+alter table public.transactions      enable row level security;
+alter table public.chat_messages     enable row level security;
+
+drop policy if exists households_select on public.households;
+create policy households_select on public.households
+  for select to authenticated using (public.is_household_member(id));
+
+drop policy if exists households_update on public.households;
+create policy households_update on public.households
+  for update to authenticated
+  using (public.is_household_member(id)) with check (public.is_household_member(id));
+
+drop policy if exists members_select on public.household_members;
+create policy members_select on public.household_members
+  for select to authenticated using (public.is_household_member(household_id));
+
+drop policy if exists members_update_self on public.household_members;
+create policy members_update_self on public.household_members
+  for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists categories_all on public.categories;
+create policy categories_all on public.categories
+  for all to authenticated
+  using (public.is_household_member(household_id))
+  with check (public.is_household_member(household_id));
+
+drop policy if exists recurring_incomes_all on public.recurring_incomes;
+create policy recurring_incomes_all on public.recurring_incomes
+  for all to authenticated
+  using (public.is_household_member(household_id))
+  with check (public.is_household_member(household_id));
+
+drop policy if exists transactions_all on public.transactions;
+create policy transactions_all on public.transactions
+  for all to authenticated
+  using (public.is_household_member(household_id))
+  with check (public.is_household_member(household_id));
+
+drop policy if exists chat_messages_all on public.chat_messages;
+create policy chat_messages_all on public.chat_messages
+  for all to authenticated
+  using (public.is_household_member(household_id))
+  with check (public.is_household_member(household_id));
+
+-- ---------------------------------------------------------------------------
+-- Creating / joining a household. These run as SECURITY DEFINER because a new
+-- user is not yet a member of anything, so RLS would block the inserts.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.create_household(p_name text, p_display_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  if exists (select 1 from public.household_members where user_id = auth.uid()) then
+    raise exception 'already in a household';
+  end if;
+
+  insert into public.households (name) values (trim(p_name)) returning id into hid;
+  insert into public.household_members (household_id, user_id, display_name)
+    values (hid, auth.uid(), trim(p_display_name));
+
+  -- Starting budget: the household's existing monthly expense table (12,000 total).
+  insert into public.categories (household_id, name, kind, is_fixed, monthly_budget, sort_order) values
+    (hid, 'חסכונות',               'saving',  false, 1200, 1),
+    (hid, 'השקעות',                'saving',  false,  800, 2),
+    (hid, 'שכירות',                'expense', true,  2700, 10),
+    (hid, 'ועד בית',               'expense', true,    35, 11),
+    (hid, 'חשמל ומים',             'expense', true,   500, 12),
+    (hid, 'גז',                    'expense', false,    0, 13),
+    (hid, 'אינטרנט',               'expense', true,   120, 14),
+    (hid, 'סלולר',                 'expense', true,    65, 15),
+    (hid, 'תחב"צ',                 'expense', false,  250, 16),
+    (hid, 'דלק',                   'expense', false,  100, 17),
+    (hid, 'פארם',                  'expense', false,  250, 18),
+    (hid, 'סופר / קניות מזון',     'expense', false, 1800, 19),
+    (hid, 'תרופות',                'expense', false,  100, 20),
+    (hid, 'טיפולים',               'expense', false,  150, 21),
+    (hid, 'טיפולי שיניים',         'expense', false,  120, 22),
+    (hid, 'אופטיקה',               'expense', false,   50, 23),
+    (hid, 'אוכל בחוץ',             'expense', false,  500, 24),
+    (hid, 'מנוי לחדר כושר וכדומה', 'expense', true,   180, 25),
+    (hid, 'חופשות בארץ/בחו"ל',     'expense', false,  400, 26),
+    (hid, 'מתנות לאירועים',        'expense', false,  150, 27),
+    (hid, 'בילויים',               'expense', false,  300, 28),
+    (hid, 'תרומות/מעשר',           'expense', false, 1200, 29),
+    (hid, 'ביגוד ונעליים',         'expense', false,  400, 30),
+    (hid, 'פלאפונים ניידים',       'expense', false,  100, 31),
+    (hid, 'שירותי ענן',            'expense', true,    50, 32),
+    (hid, 'החזר חובות',            'expense', true,     0, 33),
+    (hid, 'עמלות',                 'expense', false,   20, 34),
+    (hid, 'ריביות',                'expense', false,    0, 35),
+    (hid, 'הוצאות בלתי צפויות',    'expense', false,  460, 36);
+
+  return hid;
+end;
+$$;
+
+create or replace function public.join_household(p_code text, p_display_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  if exists (select 1 from public.household_members where user_id = auth.uid()) then
+    raise exception 'already in a household';
+  end if;
+
+  select id into hid from public.households where invite_code = upper(trim(p_code));
+  if hid is null then
+    raise exception 'invalid invite code';
+  end if;
+
+  insert into public.household_members (household_id, user_id, display_name)
+    values (hid, auth.uid(), trim(p_display_name));
+  return hid;
+end;
+$$;
+
+revoke all on function public.create_household(text, text) from public, anon;
+revoke all on function public.join_household(text, text)   from public, anon;
+revoke all on function public.is_household_member(uuid)    from public, anon;
+grant execute on function public.create_household(text, text) to authenticated;
+grant execute on function public.join_household(text, text)   to authenticated;
+grant execute on function public.is_household_member(uuid)    to authenticated;

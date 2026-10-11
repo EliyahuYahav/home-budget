@@ -1,0 +1,175 @@
+import { describe, expect, it } from "vitest";
+import { formatILS, summarizeMonth } from "./budget";
+import type { Category, Transaction } from "./types";
+
+const category = (id: string, over: Partial<Category> = {}): Category => ({
+  id,
+  name: id,
+  kind: "expense",
+  is_fixed: false,
+  monthly_budget: 0,
+  sort_order: 0,
+  archived: false,
+  ...over,
+});
+
+let nextId = 0;
+const tx = (amount: number, categoryId: string | null, over: Partial<Transaction> = {}): Transaction => ({
+  id: String(nextId++),
+  user_id: "u1",
+  type: "expense",
+  amount,
+  category_id: categoryId,
+  description: "",
+  occurred_on: "2026-10-05",
+  source: "manual",
+  created_at: "2026-10-05T10:00:00Z",
+  ...over,
+});
+
+const categories = [
+  category("savings", { kind: "saving", monthly_budget: 2000 }),
+  category("rent", { is_fixed: true, monthly_budget: 2700 }),
+  category("groceries", { monthly_budget: 1800 }),
+  category("fun", { monthly_budget: 300 }),
+];
+
+describe("summarizeMonth", () => {
+  it("sets savings aside first and reserves unpaid fixed bills", () => {
+    const summary = summarizeMonth({
+      month: "2026-10",
+      today: "2026-10-11", // 21 days left including today
+      categories,
+      recurringIncomes: [{ id: "i1", name: "salary", amount: 12000 }],
+      transactions: [tx(900, "groceries"), tx(100, "fun")],
+    });
+
+    expect(summary.income).toBe(12000);
+    expect(summary.savingsReserved).toBe(2000);
+    expect(summary.spent).toBe(1000);
+    expect(summary.remaining).toBe(9000);
+    expect(summary.fixedReserve).toBe(2700); // rent not paid yet
+    expect(summary.flexibleRemaining).toBe(6300);
+    expect(summary.daysLeft).toBe(21);
+    expect(summary.safeToSpendToday).toBe(300);
+  });
+
+  it("does not count a paid fixed bill twice", () => {
+    const summary = summarizeMonth({
+      month: "2026-10",
+      today: "2026-10-11",
+      categories,
+      recurringIncomes: [{ id: "i1", name: "salary", amount: 12000 }],
+      transactions: [tx(2700, "rent")],
+    });
+    expect(summary.fixedReserve).toBe(0);
+    expect(summary.flexibleRemaining).toBe(12000 - 2000 - 2700);
+  });
+
+  it("moving money to savings uses the reserve instead of reducing spendable money", () => {
+    const base = { month: "2026-10", today: "2026-10-11", categories };
+    const incomes = [{ id: "i1", name: "salary", amount: 12000 }];
+    const before = summarizeMonth({ ...base, recurringIncomes: incomes, transactions: [] });
+    const after = summarizeMonth({ ...base, recurringIncomes: incomes, transactions: [tx(2000, "savings")] });
+
+    expect(after.saved).toBe(2000);
+    expect(after.spent).toBe(0);
+    expect(after.flexibleRemaining).toBe(before.flexibleRemaining);
+  });
+
+  it("saving more than the target reduces what is left to spend", () => {
+    const summary = summarizeMonth({
+      month: "2026-10",
+      today: "2026-10-11",
+      categories,
+      recurringIncomes: [{ id: "i1", name: "salary", amount: 12000 }],
+      transactions: [tx(2500, "savings")],
+    });
+    expect(summary.savingsReserved).toBe(2500);
+    expect(summary.remaining).toBe(9500);
+  });
+
+  it("adds one-off income on top of fixed income", () => {
+    const summary = summarizeMonth({
+      month: "2026-10",
+      today: "2026-10-11",
+      categories,
+      recurringIncomes: [{ id: "i1", name: "salary", amount: 12000 }],
+      transactions: [tx(1500, null, { type: "income" })],
+    });
+    expect(summary.extraIncome).toBe(1500);
+    expect(summary.income).toBe(13500);
+    expect(summary.spent).toBe(0);
+  });
+
+  it("falls back to the planned budget when no income is entered", () => {
+    const summary = summarizeMonth({
+      month: "2026-10",
+      today: "2026-10-11",
+      categories,
+      recurringIncomes: [],
+      transactions: [],
+    });
+    expect(summary.incomeIsEstimated).toBe(true);
+    expect(summary.income).toBe(6800);
+  });
+
+  it("flags categories at 80% and over budget, but never savings", () => {
+    const summary = summarizeMonth({
+      month: "2026-10",
+      today: "2026-10-11",
+      categories,
+      recurringIncomes: [],
+      transactions: [tx(1440, "groceries"), tx(301, "fun"), tx(2500, "savings")],
+    });
+    const status = Object.fromEntries(summary.categories.map((c) => [c.category.id, c.status]));
+    expect(status.groceries).toBe("warning");
+    expect(status.fun).toBe("over");
+    expect(status.savings).toBe("ok");
+    expect(status.rent).toBe("ok");
+  });
+
+  it("counts uncategorized and archived-category spending as spent", () => {
+    const withArchived = [...categories, category("old", { archived: true, monthly_budget: 500 })];
+    const summary = summarizeMonth({
+      month: "2026-10",
+      today: "2026-10-11",
+      categories: withArchived,
+      recurringIncomes: [{ id: "i1", name: "salary", amount: 12000 }],
+      transactions: [tx(50, null), tx(70, "old")],
+    });
+    expect(summary.uncategorizedSpent).toBe(50);
+    expect(summary.spent).toBe(120);
+    expect(summary.categories.some((c) => c.category.id === "old")).toBe(false);
+  });
+
+  it("never shows a negative daily amount, and nothing for a finished month", () => {
+    const overspent = summarizeMonth({
+      month: "2026-10",
+      today: "2026-10-11",
+      categories,
+      recurringIncomes: [{ id: "i1", name: "salary", amount: 3000 }],
+      transactions: [tx(2000, "fun")],
+    });
+    expect(overspent.flexibleRemaining).toBeLessThan(0);
+    expect(overspent.safeToSpendToday).toBe(0);
+
+    const past = summarizeMonth({
+      month: "2026-09",
+      today: "2026-10-11",
+      categories,
+      recurringIncomes: [{ id: "i1", name: "salary", amount: 12000 }],
+      transactions: [],
+    });
+    expect(past.daysLeft).toBe(0);
+    expect(past.safeToSpendToday).toBe(0);
+  });
+});
+
+describe("formatILS", () => {
+  it("rounds to whole shekels with thousands separators", () => {
+    expect(formatILS(1234.5)).toBe("₪1,235");
+    expect(formatILS(-80)).toBe("-₪80");
+    expect(formatILS(0)).toBe("₪0");
+  });
+});
