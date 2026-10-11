@@ -187,6 +187,17 @@ export async function saveCategory(form: FormData) {
   revalidateApp();
 }
 
+export async function restoreCategory(form: FormData) {
+  const ctx = await requireContext();
+  const { error } = await ctx.supabase
+    .from("categories")
+    .update({ archived: false })
+    .eq("id", text(form, "id"))
+    .eq("household_id", ctx.household.id);
+  if (error) throw new Error(error.message);
+  revalidateApp();
+}
+
 export async function addCategory(form: FormData) {
   const ctx = await requireContext();
   const budget = Number(text(form, "monthlyBudget").replace(/,/g, "") || "0");

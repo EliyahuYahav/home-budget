@@ -1,4 +1,4 @@
-import { addCategory, saveCategory } from "@/app/actions";
+import { addCategory, restoreCategory, saveCategory } from "@/app/actions";
 import { Card, Money, MonthNav, PageTitle, ProgressBar } from "@/components/ui";
 import { summarizeMonth, type CategoryStatus } from "@/lib/budget";
 import { getMonthData, requireContext } from "@/lib/data";
@@ -107,7 +107,9 @@ export default async function BudgetPage({ searchParams }: PageProps<"/budget">)
   const today = todayISO();
   const requested = (await searchParams).m;
   const month = isValidMonth(requested) ? requested : monthOf(today);
-  const summary = summarizeMonth({ month, today, ...(await getMonthData(ctx, month)) });
+  const data = await getMonthData(ctx, month);
+  const summary = summarizeMonth({ month, today, ...data });
+  const hidden = data.categories.filter((c) => c.archived);
 
   const savings = summary.categories.filter((r) => r.category.kind === "saving");
   const fixed = summary.categories.filter((r) => r.category.kind === "expense" && r.category.is_fixed);
@@ -183,6 +185,23 @@ export default async function BudgetPage({ searchParams }: PageProps<"/budget">)
           <button className="btn col-span-2">הוספה</button>
         </form>
       </details>
+
+      {hidden.length > 0 && (
+        <details className="rounded-2xl border border-line bg-card p-4">
+          <summary className="cursor-pointer font-semibold">קטגוריות מוסתרות ({hidden.length})</summary>
+          <ul className="mt-3 divide-y divide-line">
+            {hidden.map((category) => (
+              <li key={category.id} className="flex items-center justify-between gap-2 py-2">
+                <span>{category.name}</span>
+                <form action={restoreCategory}>
+                  <input type="hidden" name="id" value={category.id} />
+                  <button className="text-sm text-accent underline">להחזיר</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </>
   );
 }
