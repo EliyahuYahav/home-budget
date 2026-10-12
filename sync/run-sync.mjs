@@ -16,12 +16,15 @@ export const here = dirname(fileURLToPath(import.meta.url));
 /** A problem the user fixes in the settings, as opposed to a run that went wrong. */
 export class SetupError extends Error {}
 
-// The login fields of each supported company. The website's form (src/lib/bank-sources.ts)
-// lists the same companies and fields.
+// The logins the sync can use: `id` is the name the login details are saved under, `company`
+// is the site it signs in to. A second login at the same company (each partner's own Max
+// account, say) is its own entry. The website's form (src/lib/bank-sources.ts) lists the same.
 export const SOURCES = [
-  { company: "discount", kind: "bank", fields: ["id", "password", "num"] },
-  { company: "mizrahi", kind: "bank", fields: ["username", "password"] },
-  { company: "max", kind: "card", fields: ["username", "password"] },
+  { id: "discount", company: "discount", kind: "bank", fields: ["id", "password", "num"] },
+  { id: "mizrahi", company: "mizrahi", kind: "bank", fields: ["username", "password"] },
+  { id: "max", company: "max", kind: "card", fields: ["username", "password"] },
+  { id: "max2", company: "max", kind: "card", fields: ["username", "password"] },
+  { id: "visaCal", company: "visaCal", kind: "card", fields: ["username", "password"] },
 ];
 
 const CHROME_PATHS = [
@@ -56,18 +59,18 @@ export function defaultSince() {
 }
 
 /**
- * Checks login details given as { company: { field: value } } and returns the sources to read.
- * A company with every field empty is simply not used.
+ * Checks login details given as { id: { field: value } } and returns the sources to read.
+ * A login with every field empty is simply not used.
  */
 export function sourcesFrom(credentials, where) {
   const sources = [];
   for (const source of SOURCES) {
-    const given = credentials[source.company] ?? {};
+    const given = credentials[source.id] ?? {};
     const filled = source.fields.filter((field) => given[field]);
     if (filled.length === 0) continue;
     if (filled.length < source.fields.length) {
       const missing = source.fields.filter((field) => !given[field]).join(", ");
-      throw new SetupError(`${source.company} is only partly filled in ${where}: ${missing} is missing.`);
+      throw new SetupError(`${source.id} is only partly filled in ${where}: ${missing} is missing.`);
     }
     sources.push({
       ...source,
@@ -139,15 +142,18 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     try {
       const result = await scrape(source, since, chrome, showBrowser);
       const count = result.accounts.reduce((sum, account) => sum + account.txns.length, 0);
-      log(`- ${source.company}: ${count} transactions in ${result.accounts.length} account(s)`);
+      log(`- ${source.id}: ${count} transactions in ${result.accounts.length} account(s)`);
       scraped.push(result);
     } catch (error) {
-      log(`- ${source.company}: failed (${error.message})`);
-      failures.push(source.company);
+      log(`- ${source.id}: failed (${error.message})`);
+      failures.push(source.id);
     }
   }
 
-  const { candidates, skipped } = toCandidates(scraped);
+  const { candidates, skipped } = toCandidates(scraped, {
+    cards: sources.filter((source) => source.kind === "card").map((source) => source.company),
+    importIncome: process.env.IMPORT_INCOME !== "off",
+  });
 
   // Hand-written rows can sit a couple of days before the bank's date.
   const from = israelDate(new Date(Date.parse(since) - (MATCH_DAYS + 1) * 86_400_000).toISOString());
@@ -178,12 +184,17 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     .eq("kind", "expense")
     .order("sort_order");
   if (categoriesError) throw new Error(categoriesError.message);
-  const categoryIds = await categorize(plan.inserts, categories, log);
+  // Only expenses are filed under a category.
+  const expenses = plan.inserts.filter((candidate) => candidate.type === "expense");
+  const expenseCategories = await categorize(expenses, categories, log);
+  const categoryOf = new Map(expenses.map((candidate, i) => [candidate, expenseCategories[i]]));
+  const categoryIds = plan.inserts.map((candidate) => categoryOf.get(candidate) ?? null);
   const categoryName = new Map(categories.map((c) => [c.id, c.name]));
 
   for (const [i, candidate] of plan.inserts.entries()) {
-    const name = categoryName.get(categoryIds[i]) ?? "(no category)";
-    log(`  + ${candidate.date}  ${candidate.amount.toFixed(2).padStart(9)}  ${candidate.description}  ->  ${name}`);
+    const name = candidate.type === "income" ? "income" : (categoryName.get(categoryIds[i]) ?? "(no category)");
+    const sign = candidate.type === "income" ? "+" : "-";
+    log(`  ${sign} ${candidate.date}  ${candidate.amount.toFixed(2).padStart(9)}  ${candidate.description}  ->  ${name}`);
   }
   for (const { candidate } of plan.links) {
     log(`  = ${candidate.date}  ${candidate.amount.toFixed(2).padStart(9)}  ${candidate.description}  (already written by hand)`);
@@ -194,7 +205,7 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
       const { error } = await supabase.from("transactions").insert(
         plan.inserts.map((candidate, i) => ({
           household_id: householdId,
-          type: "expense",
+          type: candidate.type,
           amount: candidate.amount,
           category_id: categoryIds[i],
           description: candidate.description,
@@ -215,10 +226,18 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     }
   }
 
+  for (const line of skipped.cardCharges) {
+    log(`  x ${line}  (the card's monthly charge; its purchases are read from the card)`);
+  }
+  for (const line of skipped.ownTransfers) {
+    log(`  x ${line}  (a transfer between your own accounts)`);
+  }
+
   const verb = dryRun ? "would be added" : "added";
   log(
     `${plan.inserts.length} ${verb}, ${plan.links.length} matched to hand-written rows, ${plan.known} already imported. ` +
-      `Left out: ${skipped.pending} pending, ${skipped.credits} incoming, ${skipped.cardCharges} card charges in the bank account.`,
+      `Left out: ${skipped.pending} pending, ${skipped.credits} incoming, ${skipped.cardCharges.length} card charges in the bank account, ` +
+      `${skipped.ownTransfers.length} transfers between your own accounts.`,
   );
   if (failures.length > 0) throw new Error(`Could not read: ${failures.join(", ")}.`);
 }

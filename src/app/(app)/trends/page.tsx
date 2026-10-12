@@ -1,5 +1,5 @@
 import { Card, EmptyNote, Money, MonthNav, PageTitle, SectionTitle } from "@/components/ui";
-import { dailySpending, formatILS, summarizeMonth } from "@/lib/budget";
+import { dailySpending, formatILS, settleCash, summarizeMonth } from "@/lib/budget";
 import { getCategories, getRecurringIncomes, getTransactions, requireContext } from "@/lib/data";
 import { isValidMonth, monthLabel, monthOf, shiftMonth, shortDate, todayISO } from "@/lib/dates";
 import { categoryTotals, changeFrom, monthlyTotals, projectedSpending } from "@/lib/trends";
@@ -24,11 +24,13 @@ export default async function TrendsPage({ searchParams }: PageProps<"/trends">)
   const months = Array.from({ length: MONTHS_SHOWN }, (_, i) => shiftMonth(month, i - (MONTHS_SHOWN - 1)));
 
   // One query per month keeps each well under the API's row limit.
-  const [categories, recurringIncomes, ...perMonth] = await Promise.all([
+  const [categories, recurringIncomes, ...rawPerMonth] = await Promise.all([
     getCategories(ctx),
     getRecurringIncomes(ctx),
     ...months.map((m) => getTransactions(ctx, m)),
   ]);
+  // Cash purchases come off each month's cash withdrawals, as in every other total.
+  const perMonth = rawPerMonth.map((rows) => settleCash(rows, categories).transactions);
   const transactions = perMonth[perMonth.length - 1];
 
   const totals = monthlyTotals({ months, transactions: perMonth.flat(), categories, recurringIncomes });

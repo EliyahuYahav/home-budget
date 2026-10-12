@@ -1,6 +1,8 @@
 import { daysInMonth, daysLeftInMonth } from "./dates";
 import type { Category, RecurringIncome, Transaction } from "./types";
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export interface CategoryStatus {
   category: Category;
   spent: number;
@@ -33,10 +35,55 @@ export interface MonthSummary {
   categories: CategoryStatus[];
 }
 
+/** The category that holds cash withdrawals: any expense category with "מזומן" in its name. */
+export function isCashCategory(category: Category): boolean {
+  return category.kind === "expense" && category.name.includes("מזומן");
+}
+
+/**
+ * Cash is counted as spent when it is withdrawn. A purchase later written down as paid in
+ * cash is the same money, so its amount comes off the month's withdrawals, oldest first,
+ * and the purchase keeps its own category. A withdrawal used up this way drops out.
+ * Cash purchases beyond what was withdrawn stay as they are: that cash came from elsewhere.
+ *
+ * `covered` says how much of each withdrawal (by transaction id) was taken off.
+ */
+export function settleCash(
+  transactions: Transaction[],
+  categories: Category[],
+): { transactions: Transaction[]; covered: Map<string, number> } {
+  const covered = new Map<string, number>();
+  const cashIds = new Set(categories.filter(isCashCategory).map((c) => c.id));
+  const isWithdrawal = (t: Transaction) =>
+    t.type === "expense" && t.category_id !== null && cashIds.has(t.category_id);
+
+  let pool = 0;
+  for (const t of transactions) {
+    if (t.type === "expense" && t.paid_in_cash && !isWithdrawal(t)) pool += t.amount;
+  }
+  if (cashIds.size === 0 || pool === 0) return { transactions, covered };
+
+  const withdrawals = transactions
+    .filter(isWithdrawal)
+    .sort((a, b) => a.occurred_on.localeCompare(b.occurred_on) || a.created_at.localeCompare(b.created_at));
+  for (const withdrawal of withdrawals) {
+    if (pool <= 0) break;
+    const taken = Math.min(withdrawal.amount, pool);
+    covered.set(withdrawal.id, round2(taken));
+    pool = round2(pool - taken);
+  }
+
+  const settled: Transaction[] = [];
+  for (const t of transactions) {
+    const taken = covered.get(t.id);
+    if (taken === undefined) settled.push(t);
+    else if (t.amount - taken > 0.004) settled.push({ ...t, amount: round2(t.amount - taken) });
+  }
+  return { transactions: settled, covered };
+}
+
 /** Share of a budget at which a category is flagged before it is exceeded. */
 export const WARNING_RATIO = 0.8;
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export function summarizeMonth(input: {
   month: string;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatILS, summarizeMonth } from "./budget";
+import { formatILS, settleCash, summarizeMonth } from "./budget";
 import type { Category, Transaction } from "./types";
 
 const category = (id: string, over: Partial<Category> = {}): Category => ({
@@ -171,5 +171,57 @@ describe("formatILS", () => {
     expect(formatILS(1234.5)).toBe("₪1,235");
     expect(formatILS(-80)).toBe("-₪80");
     expect(formatILS(0)).toBe("₪0");
+  });
+});
+
+describe("settleCash", () => {
+  const withCash = [...categories, category("cash", { name: "מזומן", monthly_budget: 800 })];
+
+  it("takes a cash purchase off the withdrawal and keeps the purchase in its own category", () => {
+    const withdrawal = tx(300, "cash");
+    const purchase = tx(120, "groceries", { paid_in_cash: true });
+    const { transactions, covered } = settleCash([withdrawal, purchase], withCash);
+    expect(transactions.map((t) => [t.category_id, t.amount])).toEqual([
+      ["cash", 180],
+      ["groceries", 120],
+    ]);
+    expect(covered.get(withdrawal.id)).toBe(120);
+    // The same money is counted once.
+    const summary = summarizeMonth({ month: "2026-10", today: "2026-10-10", categories: withCash, transactions, recurringIncomes: [] });
+    expect(summary.spent).toBe(300);
+  });
+
+  it("uses up the oldest withdrawal first and drops one that is fully spent", () => {
+    const first = tx(100, "cash", { occurred_on: "2026-10-02" });
+    const second = tx(200, "cash", { occurred_on: "2026-10-08" });
+    const purchase = tx(150, "fun", { paid_in_cash: true });
+    const { transactions, covered } = settleCash([second, purchase, first], withCash);
+    expect(transactions.map((t) => [t.category_id, t.amount])).toEqual([
+      ["cash", 150],
+      ["fun", 150],
+    ]);
+    expect(covered.get(first.id)).toBe(100);
+    expect(covered.get(second.id)).toBe(50);
+  });
+
+  it("leaves cash purchases beyond the withdrawals as they are", () => {
+    const withdrawal = tx(50, "cash");
+    const purchase = tx(80, "groceries", { paid_in_cash: true });
+    const { transactions } = settleCash([withdrawal, purchase], withCash);
+    expect(transactions.map((t) => [t.category_id, t.amount])).toEqual([["groceries", 80]]);
+  });
+
+  it("changes nothing without cash purchases, or without a cash category", () => {
+    const rows = [tx(300, "cash"), tx(120, "groceries")];
+    expect(settleCash(rows, withCash).transactions).toBe(rows);
+    const flagged = [tx(120, "groceries", { paid_in_cash: true })];
+    expect(settleCash(flagged, categories).transactions).toBe(flagged);
+  });
+
+  it("does not take a withdrawal off itself or touch income", () => {
+    const withdrawal = tx(300, "cash", { paid_in_cash: true });
+    const income = tx(500, null, { type: "income" });
+    const { transactions } = settleCash([withdrawal, income], withCash);
+    expect(transactions.map((t) => t.amount)).toEqual([300, 500]);
   });
 });

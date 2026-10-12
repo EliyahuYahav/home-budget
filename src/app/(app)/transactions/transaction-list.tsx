@@ -15,12 +15,15 @@ export function TransactionList({
   transactions,
   categories,
   memberNames,
+  cashCovered,
   defaultDate,
   today,
 }: {
   transactions: Transaction[];
   categories: Category[];
   memberNames: Record<string, string>;
+  /** Per cash withdrawal: how much of it was written down as cash purchases. */
+  cashCovered: Record<string, number>;
   defaultDate: string;
   today: string;
 }) {
@@ -47,8 +50,9 @@ export function TransactionList({
     return haystack.toLowerCase().includes(needle);
   });
 
+  // A withdrawal counts only for the part not already listed as cash purchases.
   const sumOf = (rows: Transaction[], type: Transaction["type"]) =>
-    rows.filter((t) => t.type === type).reduce((sum, t) => sum + t.amount, 0);
+    rows.filter((t) => t.type === type).reduce((sum, t) => sum + t.amount - (cashCovered[t.id] ?? 0), 0);
   const expenseTotal = sumOf(visible, "expense");
   const incomeTotal = sumOf(visible, "income");
 
@@ -108,6 +112,12 @@ export function TransactionList({
             <span className="text-sm font-semibold">תיאור</span>
             <input className="field" name="description" maxLength={200} />
           </label>
+          {newType === "expense" && (
+            <label className="col-span-2 flex items-center gap-2.5">
+              <input type="checkbox" className="size-5 accent-accent" name="paidInCash" />
+              שולם במזומן (יורד ממשיכות המזומן של החודש)
+            </label>
+          )}
           <SubmitButton className="btn col-span-2" pendingLabel="מוסיף…">
             הוספה
           </SubmitButton>
@@ -194,6 +204,7 @@ export function TransactionList({
                   ? "הכנסה"
                   : (categoryName.get(t.category_id ?? "") ?? "ללא קטגוריה");
                 const missing = !income && !t.category_id;
+                const covered = cashCovered[t.id] ?? 0;
                 return (
                   <li key={t.id}>
                     <details>
@@ -209,11 +220,18 @@ export function TransactionList({
                               : t.user_id && memberNames[t.user_id]
                                 ? `, ${memberNames[t.user_id]}`
                                 : ""}
+                            {t.paid_in_cash ? ", במזומן" : ""}
                           </span>
+                          {covered > 0 && (
+                            <span className="block text-sm text-muted">
+                              מתוך <span className="num">{formatILS(t.amount)}</span>,{" "}
+                              <span className="num">{formatILS(covered)}</span> נרשמו כקניות במזומן
+                            </span>
+                          )}
                         </span>
                         <span className={`num text-lg font-bold ${income ? "text-good" : ""}`}>
                           {income ? "+" : ""}
-                          {formatILS(t.amount)}
+                          {formatILS(t.amount - covered)}
                         </span>
                       </summary>
 
@@ -267,6 +285,18 @@ export function TransactionList({
                             defaultValue={t.description}
                           />
                         </label>
+                        {!income && (
+                          <label className="col-span-2 flex items-center gap-2.5">
+                            <input type="hidden" name="cashField" value="1" />
+                            <input
+                              type="checkbox"
+                              className="size-5 accent-accent"
+                              name="paidInCash"
+                              defaultChecked={t.paid_in_cash ?? false}
+                            />
+                            שולם במזומן (יורד ממשיכות המזומן של החודש)
+                          </label>
+                        )}
                         <SubmitButton>שמירה</SubmitButton>
                         <button
                           className="btn btn-danger"

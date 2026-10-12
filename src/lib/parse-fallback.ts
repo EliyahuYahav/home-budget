@@ -90,6 +90,8 @@ function parsePart(part: string, categoryNames: string[], today: string): Parsed
     category: isIncome ? null : matchCategory(rest, categoryNames),
     description,
     date,
+    // A withdrawal is cash being taken out, not something bought with it.
+    cash: !isIncome && /מזומן/.test(rest) && !/משכתי|משיכה|כספומט/.test(rest),
   };
 }
 

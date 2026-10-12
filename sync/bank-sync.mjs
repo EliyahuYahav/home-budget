@@ -12,9 +12,9 @@ import { SOURCES, SetupError, defaultSince, findChrome, loadEnvFiles, runSync, s
 /** Login details from variables such as DISCOUNT_ID and MAX_PASSWORD. */
 export function credentialsFromEnv() {
   return Object.fromEntries(
-    SOURCES.map(({ company, fields }) => [
-      company,
-      Object.fromEntries(fields.map((field) => [field, process.env[`${company}_${field}`.toUpperCase()] ?? ""])),
+    SOURCES.map(({ id, fields }) => [
+      id,
+      Object.fromEntries(fields.map((field) => [field, process.env[`${id}_${field}`.toUpperCase()] ?? ""])),
     ]),
   );
 }

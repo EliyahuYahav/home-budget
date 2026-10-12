@@ -23,6 +23,7 @@ What to extract into "entries":
 - "amount" is in shekels, always positive.
 - "category" is the number of the category, from the numbered list sent with each message, that someone keeping this household's books would file the purchase under. Most everyday spending has an obvious home: a meal or coffee out goes under eating out, groceries under the supermarket, shoes or clothes under clothing, a present bought for someone under gifts, fuel under fuel. The list was written by the couple and has gaps, so use null when no category covers that kind of spending at all, rather than stretching an unrelated one: with no grooming category a haircut gets null, not bank fees, and the app files it as uncategorized for them to sort out. Income always gets null.
 - "description" is a few Hebrew words saying what it was (the shop or item), without the amount or the date.
+- "cash" is true when they say they paid for a purchase in cash ("קניתי במזומן ירקות 80", "שילמתי מזומן"). The app counts cash as spent when it is withdrawn, and uses this to take the purchase off that withdrawal instead of counting the money twice. A withdrawal itself ("משכתי 300 מכספומט") is not a cash purchase: it is an expense with "cash" false, filed under the cash category when the list has one. Income is always false.
 - "date" is YYYY-MM-DD. Use today's date unless the message says otherwise ("אתמול", "שלשום", "ביום ראשון", a specific date). A weekday name means the most recent such day.
 
 What to put in "reply":
@@ -45,6 +46,7 @@ const schema = z.object({
       category: z.number().nullable(),
       description: z.string(),
       date: z.string(),
+      cash: z.boolean(),
     }),
   ),
   reply: z.string(),
@@ -107,6 +109,7 @@ export async function interpretMessage(input: {
         category: e.type === "income" ? null : (categoryNames[(e.category ?? 0) - 1] ?? null),
         description: e.description.trim().slice(0, 200),
         date: isValidDate(e.date) ? e.date : today,
+        cash: e.type === "expense" && e.cash,
       }));
 
     return { entries, reply: parsed.reply.trim(), usedClaude: true };

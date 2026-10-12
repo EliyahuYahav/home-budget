@@ -111,7 +111,16 @@ async function main() {
     try {
       const sources = await sourcesToRead();
       secrets = secretsOf(sources);
-      await runSync({ supabase, householdId, sources, chrome, since: defaultSince(), dryRun: run.dry_run, log });
+      await runSync({
+        supabase,
+        householdId,
+        sources,
+        chrome,
+        since: defaultSince(),
+        dryRun: run.dry_run,
+        showBrowser: process.env.SHOW_BROWSER === "on",
+        log,
+      });
     } catch (error) {
       log(redact(`${error instanceof SetupError ? "Setup" : "Failed"}: ${error.message}`, secrets));
       status = "failed";

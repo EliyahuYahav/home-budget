@@ -61,11 +61,15 @@ create table if not exists public.transactions (
   source       text not null default 'manual' check (source in ('manual', 'chat', 'bank')),
   -- The bank's or card company's own id for the charge, set by sync/bank-sync.mjs.
   external_id  text,
+  -- A purchase paid with cash that was already counted when it was withdrawn; the app
+  -- takes its amount off the month's withdrawals instead of counting the money twice.
+  paid_in_cash boolean not null default false,
   created_at   timestamptz not null default now()
 );
 
 -- For databases created before the bank sync existed.
 alter table public.transactions add column if not exists external_id text;
+alter table public.transactions add column if not exists paid_in_cash boolean not null default false;
 alter table public.transactions drop constraint if exists transactions_source_check;
 alter table public.transactions
   add constraint transactions_source_check check (source in ('manual', 'chat', 'bank'));

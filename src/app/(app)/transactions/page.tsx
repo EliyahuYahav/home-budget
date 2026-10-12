@@ -1,5 +1,6 @@
 import { MonthNav, PageTitle } from "@/components/ui";
 import { getCategories, getMembers, getTransactions, requireContext } from "@/lib/data";
+import { settleCash } from "@/lib/budget";
 import { isValidMonth, monthOf, todayISO } from "@/lib/dates";
 import { TransactionList } from "./transaction-list";
 
@@ -25,6 +26,7 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
         transactions={transactions}
         categories={categories}
         memberNames={Object.fromEntries(members.map((m) => [m.user_id, m.display_name]))}
+        cashCovered={Object.fromEntries(settleCash(transactions, categories).covered)}
         today={today}
         defaultDate={monthOf(today) === month ? today : `${month}-01`}
       />

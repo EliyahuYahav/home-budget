@@ -16,7 +16,7 @@ const parse = (text: string) => parseMessageFallback(text, NAMES, TODAY);
 describe("parseMessageFallback", () => {
   it("parses a simple expense", () => {
     expect(parse("סופר 230")).toEqual([
-      { type: "expense", amount: 230, category: "סופר / קניות מזון", description: "סופר", date: TODAY },
+      { type: "expense", amount: 230, category: "סופר / קניות מזון", description: "סופר", date: TODAY, cash: false },
     ]);
   });
 
@@ -66,5 +66,12 @@ describe("parseMessageFallback", () => {
 
   it("returns nothing when there is no amount", () => {
     expect(parse("כמה נשאר לנו החודש?")).toEqual([]);
+  });
+
+  it("marks a purchase paid in cash, but not a withdrawal or an income", () => {
+    expect(parse("ירקות במזומן 80")[0]).toMatchObject({ amount: 80, cash: true });
+    expect(parse("משכתי מזומן 300")[0]).toMatchObject({ amount: 300, cash: false });
+    expect(parse("קיבלתי מזומן 200")[0]).toMatchObject({ type: "income", cash: false });
+    expect(parse("סופר 230")[0]).toMatchObject({ cash: false });
   });
 });

@@ -127,8 +127,12 @@ r = await as("A", "insert into public.transactions (household_id, type, amount, 
 expect("a bank row can be saved", r.ok, show(r));
 r = await as("A", "insert into public.transactions (household_id, type, amount, occurred_on, source, external_id) values ($1, 'expense', 12.5, '2026-10-02', 'bank', 'max:1:77')", [hidA]);
 expect("the same bank charge cannot be saved twice", !r.ok, show(r));
+r = await as("A", "insert into public.transactions (household_id, type, amount, occurred_on, paid_in_cash) values ($1, 'expense', 40, '2026-10-03', true) returning paid_in_cash", [hidA]);
+expect("a purchase can be marked as paid in cash", r.ok && r.rows[0].paid_in_cash === true, show(r));
+r = await as("A", "insert into public.transactions (household_id, type, amount, occurred_on, source, external_id) values ($1, 'income', 9000, '2026-10-01', 'bank', 'discount:1:5')", [hidA]);
+expect("an income from the bank can be saved", r.ok, show(r));
 r = await as("C", "select * from public.transactions where household_id = $1", [hidA]);
-expect("the partner sees the shared rows", r.ok && r.rows.length === 1, show(r));
+expect("the partner sees the shared rows", r.ok && r.rows.length === 3, show(r));
 r = await as("A", "insert into public.bank_sync_settings (household_id, public_key, agent_seen_at) values ($1, '{\"n\":\"x\"}'::jsonb, now()) on conflict (household_id) do update set public_key = excluded.public_key, agent_seen_at = excluded.agent_seen_at", [hidA]);
 expect("the agent can publish its key", r.ok, show(r));
 r = await as("A", "update public.bank_sync_settings set credentials = 'sealed' where household_id = $1", [hidA]);

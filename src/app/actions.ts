@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { interpretMessage } from "@/lib/bot";
-import { formatILS, summarizeMonth } from "@/lib/budget";
+import { formatILS, isCashCategory, summarizeMonth } from "@/lib/budget";
 import { getMonthData, requireContext } from "@/lib/data";
 import { isValidDate, monthOf, shortDate, todayISO } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
@@ -126,6 +126,7 @@ export async function addTransaction(form: FormData) {
     description: text(form, "description").slice(0, 200),
     occurred_on: isValidDate(date) ? date : todayISO(),
     source: "manual",
+    ...(type === "expense" && form.get("paidInCash") === "on" ? { paid_in_cash: true } : {}),
   });
   if (error) throw new Error(error.message);
   revalidateApp();
@@ -144,6 +145,8 @@ export async function updateTransaction(form: FormData) {
       category_id: text(form, "categoryId") || null,
       description: text(form, "description").slice(0, 200),
       occurred_on: date,
+      // The checkbox is only in the form of an expense; other forms leave the column alone.
+      ...(form.has("cashField") ? { paid_in_cash: form.get("paidInCash") === "on" } : {}),
     })
     .eq("id", text(form, "id"))
     .eq("household_id", ctx.household.id);
@@ -251,7 +254,7 @@ function describeEntry(entry: ParsedEntry, today: string): string {
   const when = entry.date === today ? "היום" : shortDate(entry.date);
   const what = entry.type === "income" ? "הכנסה" : (entry.category ?? "ללא קטגוריה");
   const detail = entry.description ? ` · ${entry.description}` : "";
-  return `${formatILS(entry.amount)} · ${what}${detail} · ${when}`;
+  return `${formatILS(entry.amount)} · ${what}${detail} · ${when}${entry.cash ? " · במזומן" : ""}`;
 }
 
 export async function sendChatMessage(
@@ -312,6 +315,7 @@ export async function sendChatMessage(
         description: entry.description,
         occurred_on: entry.date,
         source: "chat",
+        ...(entry.cash ? { paid_in_cash: true } : {}),
       })),
     ).select("id");
     if (error) throw new Error(error.message);
@@ -336,6 +340,13 @@ export async function sendChatMessage(
     }
     if (interpretation.entries.some((e) => e.type === "expense" && e.category === null)) {
       lines.push("לא מצאתי קטגוריה מתאימה לחלק מהשורות. אפשר לבחור אחת במסך ההוצאות.");
+    }
+    if (interpretation.entries.some((e) => e.cash)) {
+      lines.push(
+        active.some(isCashCategory)
+          ? "מה ששולם במזומן יורד ממשיכות המזומן של החודש, כדי שלא ייספר פעמיים."
+          : 'כדי שקניות במזומן ירדו מהמשיכות, צריך קטגוריה בשם "מזומן" במסך התקציב.',
+      );
     }
     if (interpretation.entries.some((e) => monthOf(e.date) === month)) {
       lines.push(`מותר להוציא היום: ${formatILS(summary.safeToSpendToday)}`);

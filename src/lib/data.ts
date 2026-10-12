@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { settleCash } from "./budget";
 import { monthRange } from "./dates";
 import { createClient } from "./supabase/server";
 import type { Category, ChatMessage, Member, RecurringIncome, Transaction } from "./types";
@@ -52,7 +53,8 @@ export async function getTransactions(ctx: AppContext, month: string): Promise<T
   const { start, endExclusive } = monthRange(month);
   const { data, error } = await ctx.supabase
     .from("transactions")
-    .select("id, user_id, type, amount, category_id, description, occurred_on, source, created_at")
+    // Every column, so a database that has not been given the newest ones yet still answers.
+    .select("*")
     .eq("household_id", ctx.household.id)
     .gte("occurred_on", start)
     .lt("occurred_on", endExclusive)
@@ -100,5 +102,6 @@ export async function getMonthData(ctx: AppContext, month: string) {
     getTransactions(ctx, month),
     getRecurringIncomes(ctx),
   ]);
-  return { categories, transactions, recurringIncomes };
+  // For every total and summary: cash purchases come off the cash withdrawals.
+  return { categories, transactions: settleCash(transactions, categories).transactions, recurringIncomes };
 }

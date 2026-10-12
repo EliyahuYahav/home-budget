@@ -20,6 +20,8 @@ export interface Transaction {
   description: string;
   occurred_on: string; // YYYY-MM-DD
   source: "manual" | "chat" | "bank";
+  /** Paid with cash already counted at withdrawal. See settleCash in budget.ts. */
+  paid_in_cash?: boolean;
   created_at: string;
 }
 
@@ -50,4 +52,6 @@ export interface ParsedEntry {
   category: string | null;
   description: string;
   date: string; // YYYY-MM-DD
+  /** Paid with cash, as opposed to a card or a transfer. */
+  cash: boolean;
 }

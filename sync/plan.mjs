@@ -3,13 +3,23 @@
 
 /**
  * @typedef {{ company: string, kind: "bank" | "card", accounts: { accountNumber: string, txns: any[] }[] }} ScrapedSource
- * @typedef {{ externalId: string, company: string, amount: number, date: string, description: string }} Candidate
+ * @typedef {{ externalId: string, company: string, type: "expense" | "income", amount: number, date: string, description: string }} Candidate
  * @typedef {{ id: string, external_id: string | null, type: string, amount: number, occurred_on: string }} ExistingRow
  */
 
 // The card's monthly charge in the bank account is the sum of purchases that the card
-// itself already reports one by one, so importing it would count them twice.
-const CARD_CHARGE = /מקס|max\b|לאומי קארד|כאל|\bcal\b|ישראכרט|isracard|ויזה|visa|אמריקן אקספרס|amex|דיינרס|diners|מסטרקארד|mastercard/i;
+// itself already reports one by one, so importing it would count them twice. That is only
+// true for a card the sync reads: the charge of any other card is the one record of that
+// spending, and is imported as a single line. Matched after dropping dots and quotes,
+// because banks print names like "כ.א.ל".
+const CARD_CHARGE = {
+  max: /מקס|max|לאומי קארד/i,
+  visaCal: /כאל|cal\b|ויזה כאל/i,
+  isracard: /ישראכרט|isracard/i,
+  amex: /אמריקן אקספרס|amex|american express/i,
+};
+
+const plainName = (name) => name.replace(/[.'"׳״]/g, "");
 
 const israelDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" });
 
@@ -25,18 +35,62 @@ function dayDistance(a, b) {
 }
 
 /**
- * Turns what the scrapers returned into expenses that could be imported.
- * Left out, and counted in `skipped`: charges still pending (they have no stable id and
- * their amount can change), money coming in (salaries are set up as fixed incomes), and
- * the card's monthly charge in the bank account.
+ * A transfer between two of the household's own accounts shows up as money out of one and
+ * the same amount into the other. It is neither spending nor income, so both lines are left out.
+ * Returns the transactions to leave out and a line describing each pair.
+ */
+function ownTransfers(sources) {
+  const lines = [];
+  for (const { kind, accounts } of sources) {
+    if (kind !== "bank") continue;
+    for (const { accountNumber, txns } of accounts) {
+      for (const txn of txns) {
+        if (txn.status === "completed" && txn.chargedAmount) lines.push({ txn, accountNumber });
+      }
+    }
+  }
+  const out = lines.filter((line) => line.txn.chargedAmount < 0);
+  const incoming = lines.filter((line) => line.txn.chargedAmount > 0);
+  const paired = new Set();
+  const described = [];
+  for (const debit of out) {
+    const match = incoming.find(
+      (credit) =>
+        !paired.has(credit.txn) &&
+        credit.accountNumber !== debit.accountNumber &&
+        cents(credit.txn.chargedAmount) === cents(-debit.txn.chargedAmount) &&
+        dayDistance(credit.txn.date, debit.txn.date) <= 1,
+    );
+    if (!match) continue;
+    paired.add(debit.txn).add(match.txn);
+    described.push(
+      `${israelDate(debit.txn.date)} ${(-debit.txn.chargedAmount).toFixed(2)} ${debit.accountNumber} -> ${match.accountNumber}`,
+    );
+  }
+  return { paired, described };
+}
+
+/**
+ * Turns what the scrapers returned into rows that could be imported: money out as expenses,
+ * money in as income.
+ * Left out, and reported in `skipped`: charges still pending (they have no stable id and
+ * their amount can change), the monthly charge in the bank account of a card that is read
+ * itself, transfers between the household's own accounts, and, when `importIncome` is off,
+ * money coming in.
  *
  * @param {ScrapedSource[]} sources
- * @returns {{ candidates: Candidate[], skipped: { pending: number, credits: number, cardCharges: number } }}
+ * @param {{ cards?: string[], importIncome?: boolean }} [options] `cards` are the card
+ *   companies set up for reading, whether or not this run reached them.
+ * @returns {{ candidates: Candidate[], skipped: { pending: number, credits: number, cardCharges: string[], ownTransfers: string[] } }}
  */
-export function toCandidates(sources) {
+export function toCandidates(sources, options = {}) {
+  const cards = options.cards ?? sources.filter((s) => s.kind === "card").map((s) => s.company);
+  const importIncome = options.importIncome ?? true;
   const candidates = [];
-  const skipped = { pending: 0, credits: 0, cardCharges: 0 };
+  const transfers = ownTransfers(sources);
+  const skipped = { pending: 0, credits: 0, cardCharges: [], ownTransfers: transfers.described };
   const seen = new Map();
+  const cardCharge = cards.map((company) => CARD_CHARGE[company]).filter(Boolean);
 
   for (const { company, kind, accounts } of sources) {
     for (const { accountNumber, txns } of accounts) {
@@ -45,17 +99,19 @@ export function toCandidates(sources) {
           skipped.pending += 1;
           continue;
         }
-        if (!(txn.chargedAmount < 0)) {
+        if (transfers.paired.has(txn) || !txn.chargedAmount) continue;
+        const type = txn.chargedAmount < 0 ? "expense" : "income";
+        if (type === "income" && !importIncome) {
           skipped.credits += 1;
           continue;
         }
         const name = String(txn.description ?? "").trim();
-        if (kind === "bank" && CARD_CHARGE.test(name)) {
-          skipped.cardCharges += 1;
+        if (type === "expense" && kind === "bank" && cardCharge.some((pattern) => pattern.test(plainName(name)))) {
+          skipped.cardCharges.push(`${israelDate(txn.date)} ${(-txn.chargedAmount).toFixed(2)} ${name}`);
           continue;
         }
 
-        const amount = cents(-txn.chargedAmount) / 100;
+        const amount = cents(Math.abs(txn.chargedAmount)) / 100;
         const date = israelDate(txn.date);
         const part = txn.installments ? `:${txn.installments.number}` : "";
         let key;
@@ -76,6 +132,7 @@ export function toCandidates(sources) {
         candidates.push({
           externalId: key,
           company,
+          type,
           amount,
           date,
           description: `${name}${installments}`.slice(0, 200),
@@ -91,8 +148,8 @@ export const MATCH_DAYS = 2;
 
 /**
  * Splits candidates into rows to add, rows already in the app, and hand-written rows
- * (from the bot or the expenses screen) that are the same purchase and only need the
- * bank's id attached so the next run recognises them.
+ * (from the bot or the expenses screen) that are the same purchase or income and only
+ * need the bank's id attached so the next run recognises them.
  *
  * @param {Candidate[]} candidates
  * @param {ExistingRow[]} existing
@@ -100,7 +157,7 @@ export const MATCH_DAYS = 2;
  */
 export function planImport(candidates, existing) {
   const knownIds = new Set(existing.map((row) => row.external_id).filter(Boolean));
-  const free = existing.filter((row) => !row.external_id && row.type === "expense");
+  const free = existing.filter((row) => !row.external_id);
   const taken = new Set();
   const inserts = [];
   const links = [];
@@ -115,7 +172,7 @@ export function planImport(candidates, existing) {
 
     let best = null;
     for (const row of free) {
-      if (taken.has(row.id) || cents(row.amount) !== cents(candidate.amount)) continue;
+      if (taken.has(row.id) || row.type !== candidate.type || cents(row.amount) !== cents(candidate.amount)) continue;
       const distance = dayDistance(row.occurred_on, candidate.date);
       if (distance <= MATCH_DAYS && (best === null || distance < best.distance)) {
         best = { row, distance };
