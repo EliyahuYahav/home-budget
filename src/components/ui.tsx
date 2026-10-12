@@ -6,7 +6,7 @@ import { ChevronEnd, ChevronStart } from "./icons";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-3xl bg-card p-4 shadow-card ${className}`}>{children}</section>
+    <section className={`panel p-4 ${className}`}>{children}</section>
   );
 }
 
@@ -15,7 +15,12 @@ export function Money({ amount, className = "" }: { amount: number; className?: 
 }
 
 export function PageTitle({ children }: { children: ReactNode }) {
-  return <h1 className="font-display text-3xl font-bold">{children}</h1>;
+  return (
+    <header className="space-y-2">
+      <h1 className="font-display text-5xl font-bold leading-none">{children}</h1>
+      <div className="dots text-accent" aria-hidden="true" />
+    </header>
+  );
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {
@@ -41,7 +46,7 @@ export function ProgressBar({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent}
-      className="h-2 overflow-hidden rounded-full bg-line"
+      className="h-1.5 overflow-hidden rounded-full bg-line"
     >
       <div className={`h-full rounded-full ${BAR_COLORS[status]}`} style={{ width: `${percent}%` }} />
     </div>
@@ -50,13 +55,13 @@ export function ProgressBar({
 
 /** Previous / next month arrows around the current month's name. */
 export function MonthNav({ month, basePath }: { month: string; basePath: string }) {
-  const link = "flex size-11 items-center justify-center rounded-full bg-card shadow-card";
+  const link = "panel flex size-11 items-center justify-center rounded-full";
   return (
     <nav aria-label="בחירת חודש" className="flex items-center justify-between gap-2">
       <Link className={link} href={`${basePath}?m=${shiftMonth(month, -1)}`} aria-label="החודש הקודם">
         <ChevronStart />
       </Link>
-      <span className="text-lg font-bold">{monthLabel(month)}</span>
+      <span className="font-display text-3xl font-bold">{monthLabel(month)}</span>
       <Link className={link} href={`${basePath}?m=${shiftMonth(month, 1)}`} aria-label="החודש הבא">
         <ChevronEnd />
       </Link>

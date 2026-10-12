@@ -1,43 +1,60 @@
 @import "tailwindcss";
 /* Self-hosted through npm, so nothing is fetched from a font service at build or run time. */
-@import "@fontsource-variable/assistant";
-@import "@fontsource-variable/frank-ruhl-libre";
+@import "@fontsource-variable/heebo";
+@import "@fontsource/karantina/400.css";
+@import "@fontsource/karantina/700.css";
 
-/* The status colours follow the shekel notes: blue 200, green 50, orange 100, red 20. */
+/* Soft pastels: peach, lavender and powder blue behind near-white panels. */
 :root {
-  --bg: #eef0f6;
-  --card: #ffffff;
-  --ink: #14183a;
-  --muted: #5d6385;
-  --line: #dcdfeb;
-  --accent: #2b3bd0;
+  --bg: #f7f4f2;
+  --card: rgb(255 255 255 / 0.82);
+  --card-line: rgb(255 255 255 / 0.95);
+  --field: rgb(255 255 255 / 0.9);
+  --ink: #25233f;
+  --muted: #65637f;
+  --line: #e3dfea;
+  --accent: #5a5cd0;
   --accent-ink: #ffffff;
-  --accent-soft: #e4e8fb;
-  --hero: #2433b8;
-  --hero-ink: #ffffff;
-  --good: #17805a;
-  --good-soft: #dcf1e7;
-  --warn: #a96207;
-  --warn-soft: #fbefd6;
-  --danger: #c2362f;
-  --danger-soft: #fbe4e1;
-  --shadow: 0 1px 2px rgb(20 24 58 / 0.05), 0 6px 20px -12px rgb(20 24 58 / 0.25);
+  --accent-soft: #e9e8fb;
+  --coral: #e9806f;
+  --hero-a: #fbd3c4;
+  --hero-b: #dcd5f7;
+  --hero-c: #c9def6;
+  --hero-ink: #25233f;
+  --blob-a: #fbdccf;
+  --blob-b: #e0dbf8;
+  --blob-c: #d3e4f7;
+  --good: #23805c;
+  --good-soft: #ddf1e8;
+  --warn: #a2650f;
+  --warn-soft: #fbeed8;
+  --danger: #c7453f;
+  --danger-soft: #fbe5e2;
+  --shadow: 0 1px 2px rgb(37 35 63 / 0.04), 0 14px 32px -18px rgb(37 35 63 / 0.28);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0c0f22;
-    --card: #161a35;
-    --ink: #eceefa;
-    --muted: #9aa0c4;
-    --line: #272c52;
-    --accent: #8b97ff;
-    --accent-ink: #0c0f22;
-    --accent-soft: #1f2550;
-    --hero: #2a36a8;
+    --bg: #17162a;
+    --card: rgb(40 38 68 / 0.78);
+    --card-line: rgb(255 255 255 / 0.07);
+    --field: rgb(23 22 42 / 0.7);
+    --ink: #efedf8;
+    --muted: #a9a6c6;
+    --line: #36345c;
+    --accent: #a3a5ff;
+    --accent-ink: #17162a;
+    --accent-soft: #2c2b55;
+    --coral: #f29c8c;
+    --hero-a: #5a3550;
+    --hero-b: #3b3880;
+    --hero-c: #254a75;
     --hero-ink: #ffffff;
-    --good: #55c79a;
-    --good-soft: #14302a;
+    --blob-a: #3d2940;
+    --blob-b: #2a2858;
+    --blob-c: #1d3350;
+    --good: #5fcba0;
+    --good-soft: #17332c;
     --warn: #e6ad52;
     --warn-soft: #33290f;
     --danger: #f2877f;
@@ -49,13 +66,14 @@
 @theme inline {
   --color-bg: var(--bg);
   --color-card: var(--card);
+  --color-card-line: var(--card-line);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --color-accent-soft: var(--accent-soft);
-  --color-hero: var(--hero);
+  --color-coral: var(--coral);
   --color-hero-ink: var(--hero-ink);
   --color-good: var(--good);
   --color-good-soft: var(--good-soft);
@@ -63,9 +81,9 @@
   --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
-  --font-sans: "Assistant Variable", system-ui, "Segoe UI", "Noto Sans Hebrew", Arial, sans-serif;
-  /* Headings and large amounts: a bookish Hebrew serif, like a printed ledger. */
-  --font-display: "Frank Ruhl Libre Variable", "Times New Roman", serif;
+  --font-sans: "Heebo Variable", system-ui, "Segoe UI", "Noto Sans Hebrew", Arial, sans-serif;
+  /* Headings and large amounts: tall, narrow letters, set large and spaced out. */
+  --font-display: "Karantina", "Heebo Variable", system-ui, sans-serif;
   --shadow-card: var(--shadow);
 }
 
@@ -80,6 +98,88 @@ body {
   line-height: 1.5;
 }
 
+/* Three soft colour fields that stay put while the page scrolls. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(70% 42% at 95% 0%, var(--blob-a), transparent 72%),
+    radial-gradient(60% 38% at 0% 38%, var(--blob-b), transparent 72%),
+    radial-gradient(80% 42% at 65% 100%, var(--blob-c), transparent 72%);
+}
+
+.font-display {
+  letter-spacing: 0.04em;
+}
+
+/* The surface every card, list and disclosure sits on. */
+.panel {
+  border: 1px solid var(--card-line);
+  border-radius: 1.5rem;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+/* The headline panel: a pastel wash with two slow organic shapes behind the text. */
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 2rem;
+  background: linear-gradient(150deg, var(--hero-a), var(--hero-b) 55%, var(--hero-c));
+  color: var(--hero-ink);
+  box-shadow: var(--shadow);
+}
+
+.hero::before,
+.hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+}
+
+.hero::before {
+  inset-block-start: -30%;
+  inset-inline-end: -22%;
+  width: 78%;
+  aspect-ratio: 1.15;
+  border-radius: 58% 42% 63% 37% / 44% 58% 42% 56%;
+  background: linear-gradient(200deg, var(--hero-c), var(--hero-b) 60%, transparent);
+  opacity: 0.9;
+  animation: drift 18s ease-in-out infinite alternate;
+}
+
+.hero::after {
+  inset-block-end: -38%;
+  inset-inline-start: -18%;
+  width: 62%;
+  aspect-ratio: 1;
+  border-radius: 41% 59% 38% 62% / 57% 39% 61% 43%;
+  background: linear-gradient(20deg, var(--hero-a), transparent 75%);
+  opacity: 0.85;
+  animation: drift 22s ease-in-out infinite alternate-reverse;
+}
+
+.hero-over {
+  background: linear-gradient(150deg, var(--danger-soft), var(--hero-a) 60%, var(--hero-b));
+}
+
+@keyframes drift {
+  to {
+    border-radius: 42% 58% 39% 61% / 60% 41% 59% 40%;
+    transform: translate(-4%, 5%) rotate(8deg);
+  }
+}
+
+/* A row of dots, used as a quiet divider. */
+.dots {
+  height: 3px;
+  background: radial-gradient(circle, currentColor 1.5px, transparent 1.6px) 0 0 / 14px 3px repeat-x;
+  opacity: 0.35;
+}
+
 /* Amounts: digits of equal width so columns line up, and never reordered by RTL. */
 .num {
   font-variant-numeric: tabular-nums;
@@ -92,7 +192,7 @@ body {
   min-height: 2.875rem;
   border: 1px solid var(--line);
   border-radius: 0.875rem;
-  background: var(--card);
+  background: var(--field);
   padding: 0.6rem 0.85rem;
   font-size: 1rem; /* 16px keeps mobile browsers from zooming on focus */
   color: var(--ink);
@@ -202,6 +302,8 @@ details[open] > summary .chevron {
 @media (prefers-reduced-motion: reduce) {
   .typing span,
   .chevron,
+  .hero::before,
+  .hero::after,
   .btn {
     animation: none;
     transition: none;

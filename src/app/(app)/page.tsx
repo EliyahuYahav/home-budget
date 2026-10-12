@@ -31,28 +31,28 @@ export default async function HomePage() {
     <>
       <header className="flex items-center justify-between">
         <div>
-          <p className="text-muted">{monthLabel(month)}</p>
-          <h1 className="font-display text-3xl font-bold">שלום, {ctx.displayName}</h1>
+          <p className="text-sm font-semibold tracking-[0.2em] text-muted">{monthLabel(month)}</p>
+          <h1 className="font-display text-5xl font-bold leading-none">שלום, {ctx.displayName}</h1>
         </div>
         <Link
           href="/settings"
-          aria-label="הגדרות"
-          className="flex size-11 items-center justify-center rounded-full bg-card text-muted shadow-card"
+          className="panel flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold"
         >
-          <GearIcon />
+          <GearIcon className="size-5 text-accent" />
+          הגדרות
         </Link>
       </header>
 
       <section
-        className={`space-y-4 rounded-[2rem] p-5 text-hero-ink ${overBudget ? "bg-danger" : "bg-hero"}`}
+        className={`hero space-y-4 p-5 ${overBudget ? "hero-over" : ""}`}
       >
         <div>
-          <h2 className="text-hero-ink/80">מותר להוציא היום</h2>
-          <p className="num font-display text-7xl font-bold leading-none">
-            <span className="align-top text-3xl font-medium">₪</span>
+          <h2 className="text-sm font-semibold tracking-[0.2em] text-hero-ink/75">מותר להוציא היום</h2>
+          <p className="num font-display text-[6.5rem] font-bold leading-[0.9]">
+            <span className="align-top text-4xl font-normal">₪</span>
             {Math.round(summary.safeToSpendToday).toLocaleString("en-US")}
           </p>
-          <p className="mt-2 text-hero-ink/85">
+          <p className="mt-2 text-hero-ink/80">
             {overBudget ? (
               <>
                 חרגתם ב־<Money amount={-summary.flexibleRemaining} /> ממה שפנוי החודש, אחרי חיסכון
@@ -71,22 +71,22 @@ export default async function HomePage() {
 
       <QuickAdd />
 
-      <Card className="grid grid-cols-3 p-0 text-center">
+      <Card className="grid grid-cols-3 !p-0 text-center">
         <div className="p-3">
           <p className="text-sm text-muted">הכנסות</p>
-          <p className="text-lg font-bold">
+          <p className="font-display text-3xl font-bold">
             <Money amount={summary.income} />
           </p>
         </div>
         <div className="border-s border-line p-3">
           <p className="text-sm text-muted">הוצאות</p>
-          <p className="text-lg font-bold">
+          <p className="font-display text-3xl font-bold">
             <Money amount={summary.spent} />
           </p>
         </div>
         <div className="border-s border-line p-3">
           <p className="text-sm text-muted">נשאר</p>
-          <p className={`text-lg font-bold ${summary.remaining < 0 ? "text-danger" : ""}`}>
+          <p className={`font-display text-3xl font-bold ${summary.remaining < 0 ? "text-danger" : ""}`}>
             <Money amount={summary.remaining} />
           </p>
         </div>
@@ -179,7 +179,7 @@ export default async function HomePage() {
 
       <Link
         href="/trends"
-        className="flex items-center justify-between rounded-3xl bg-card p-4 font-bold shadow-card"
+        className="flex items-center justify-between panel p-4 font-bold"
       >
         <span>סיכום החודש ומגמות</span>
         <ChevronEnd className="text-muted" />

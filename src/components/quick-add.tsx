@@ -59,7 +59,7 @@ export function QuickAdd() {
 
   return (
     <div className="space-y-2">
-      <form onSubmit={onSubmit} className="flex gap-2 rounded-full bg-card p-1.5 ps-4 shadow-card focus-within:outline-2 focus-within:outline-accent">
+      <form onSubmit={onSubmit} className="panel flex gap-2 rounded-full p-1.5 ps-4 focus-within:outline-2 focus-within:outline-accent">
         <label className="sr-only" htmlFor="quick-add">
           מה הוצאתם?
         </label>
@@ -91,7 +91,7 @@ export function QuickAdd() {
       </form>
       <div aria-live="polite">
         {reply && (
-          <div className="space-y-2 rounded-3xl bg-accent-soft p-4 text-[0.95rem] leading-relaxed">
+          <div className="space-y-2 rounded-3xl border border-card-line bg-accent-soft p-4 text-[0.95rem] leading-relaxed">
             <p className="whitespace-pre-line">
               <BotText text={reply} />
             </p>

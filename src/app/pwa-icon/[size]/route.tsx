@@ -20,8 +20,8 @@ export async function GET(_request: Request, { params }: RouteContext<"/pwa-icon
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#2433b8",
-          color: "#ffffff",
+          background: "linear-gradient(150deg, #fbd3c4, #dcd5f7 55%, #c9def6)",
+          color: "#25233f",
           fontSize: size * 0.52,
           fontWeight: 700,
         }}

@@ -62,7 +62,7 @@ export function TransactionList({
 
   return (
     <div className="space-y-4">
-      <details className="rounded-3xl bg-card shadow-card">
+      <details className="panel">
         <summary className="flex cursor-pointer items-center gap-3 p-4 font-bold">
           <span className="flex size-8 items-center justify-center rounded-full bg-accent-soft text-accent">
             <PlusIcon className="size-5" />
@@ -187,7 +187,7 @@ export function TransactionList({
                 <span className="num">{formatILS(sumOf(rows, "expense"))}</span>
               )}
             </h2>
-            <ul className="divide-y divide-line rounded-3xl bg-card shadow-card">
+            <ul className="divide-y divide-line panel">
               {rows.map((t) => {
                 const income = t.type === "income";
                 const label = income

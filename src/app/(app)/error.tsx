@@ -15,8 +15,8 @@ export default function ScreenError({
   }, [error]);
 
   return (
-    <div role="alert" className="space-y-4 rounded-3xl bg-card p-6 text-center shadow-card">
-      <h1 className="font-display text-3xl font-bold">המסך לא נטען</h1>
+    <div role="alert" className="space-y-4 panel p-6 text-center">
+      <h1 className="font-display text-5xl leading-none font-bold">המסך לא נטען</h1>
       <p className="text-muted">
         משהו השתבש בטעינה. אם זו בעיית חיבור רגעית, ניסיון נוסף אמור לעזור.
       </p>

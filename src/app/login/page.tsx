@@ -16,12 +16,12 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 p-4">
-      <header className="rounded-[2rem] bg-hero p-6 text-hero-ink">
-        <p className="font-display text-6xl font-bold leading-none" aria-hidden="true">
+      <header className="hero p-6">
+        <p className="font-display text-8xl font-bold leading-none" aria-hidden="true">
           ₪
         </p>
-        <h1 className="mt-4 font-display text-4xl font-bold">תקציב הבית</h1>
-        <p className="mt-1 text-hero-ink/85">כותבים מה הוצאתם, והשאר מסתדר לבד.</p>
+        <h1 className="mt-3 font-display text-6xl font-bold leading-none">תקציב הבית</h1>
+        <p className="mt-1 text-hero-ink/80">כותבים מה הוצאתם, והשאר מסתדר לבד.</p>
       </header>
 
       <form action={isSignIn ? signInAction : signUpAction} className="space-y-3">

@@ -7,7 +7,7 @@ import { SendIcon } from "@/components/icons";
 import { dayLabel, todayISO } from "@/lib/dates";
 import type { ChatMessage } from "@/lib/types";
 
-const EXAMPLES = ["סופר 230", "דלק 180 אתמול", "קיבלתי בונוס 1500", "כמה נשאר לנו החודש?"];
+const EXAMPLES = ["דלק 180 אתמול", "קיבלתי בונוס 1500", "כמה נשאר לנו החודש?"];
 
 const timeFormat = new Intl.DateTimeFormat("he-IL", {
   timeZone: "Asia/Jerusalem",
@@ -34,12 +34,14 @@ export function ChatWindow({
   /** Rows logged by the latest bot answer, which can still be taken back. */
   const [undoable, setUndoable] = useState<{ messageId: string; ids: string[] } | null>(null);
   const [undoing, setUndoing] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLOListElement>(null);
   const sending = pending !== "";
 
+  // Only the message list scrolls, and it follows the newest message.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, pending]);
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [messages, pending, undoable]);
 
   async function send(text: string) {
     const content = text.trim();
@@ -84,16 +86,22 @@ export function ChatWindow({
   const dayOf = (message: ChatMessage) => todayISO(new Date(message.created_at));
 
   return (
-    <div className="flex min-h-[calc(100dvh-9rem)] flex-col">
-      <header className="pb-3">
-        <h1 className="font-display text-3xl font-bold">הבוט</h1>
+    // As tall as the space between the top of the screen and the navigation bar, so the
+    // header and the writing bar never move.
+    <div className="flex h-[calc(100dvh-9rem-env(safe-area-inset-bottom))] flex-col">
+      <header className="shrink-0 pb-3">
+        <h1 className="font-display text-5xl font-bold leading-none">הבוט</h1>
         <p className="text-muted">
           כותבים מה הוצאתם וכמה, והוא רושם ומשייך לקטגוריה.
           {!smartBot && " כרגע פועל הזיהוי הבסיסי, בלי Claude."}
         </p>
       </header>
 
-      <ol className="flex-1 space-y-2" aria-live="polite">
+      <ol
+        ref={listRef}
+        className="-mx-4 min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        aria-live="polite"
+      >
         {messages.length === 0 && !sending && (
           <li className="rounded-3xl border border-dashed border-line p-5 text-center text-muted">
             עוד אין הודעות. אפשר להתחיל באחת מהדוגמאות שלמטה.
@@ -115,15 +123,15 @@ export function ChatWindow({
               )}
               <div className={`flex ${mine ? "justify-start" : "justify-end"}`}>
                 <div
-                  className={`max-w-[85%] whitespace-pre-line rounded-3xl px-4 py-2.5 leading-relaxed ${
+                  className={`max-w-[85%] whitespace-pre-line rounded-3xl px-4 py-3 leading-relaxed ${
                     mine
                       ? "rounded-ss-lg bg-accent text-accent-ink"
-                      : "rounded-se-lg bg-card shadow-card"
+                      : "rounded-se-lg border border-card-line bg-card shadow-card"
                   }`}
                 >
                   {author && <p className="text-sm font-bold opacity-80">{author}</p>}
                   <BotText text={message.content} />
-                  <span className={`num ms-2 text-xs ${mine ? "opacity-75" : "text-muted"}`}>
+                  <span className={`num mt-1.5 block text-end text-xs ${mine ? "opacity-75" : "text-muted"}`}>
                     {timeFormat.format(sentAt)}
                   </span>
                 </div>
@@ -151,7 +159,7 @@ export function ChatWindow({
               </div>
             </li>
             <li className="flex justify-end">
-              <div className="rounded-3xl rounded-se-lg bg-card px-4 py-3 shadow-card">
+              <div className="rounded-3xl rounded-se-lg border border-card-line bg-card px-4 py-3 shadow-card">
                 <span className="typing" role="status" aria-label="הבוט רושם">
                   <span />
                   <span />
@@ -162,9 +170,8 @@ export function ChatWindow({
           </>
         )}
       </ol>
-      <div ref={endRef} />
 
-      <div className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] -mx-4 space-y-2 bg-bg px-4 pb-3 pt-3">
+      <div className="shrink-0 space-y-2 pt-3">
         {error && (
           <p role="alert" className="rounded-2xl bg-danger-soft p-3 text-sm text-danger">
             {error}
@@ -183,7 +190,7 @@ export function ChatWindow({
             </button>
           ))}
         </div>
-        <form onSubmit={onSubmit} className="flex gap-2 rounded-full bg-card p-1.5 ps-4 shadow-card focus-within:outline-2 focus-within:outline-accent">
+        <form onSubmit={onSubmit} className="panel flex gap-2 rounded-full p-1.5 ps-4 focus-within:outline-2 focus-within:outline-accent">
           <label className="sr-only" htmlFor="chat-input">
             הודעה לבוט
           </label>

@@ -20,7 +20,7 @@ export function OnboardingForms() {
 
   return (
     <div className="space-y-4">
-      <form action={createAction} className="space-y-3 rounded-3xl bg-card p-4 shadow-card">
+      <form action={createAction} className="space-y-3 panel p-4">
         <h2 className="text-lg font-bold">משק בית חדש</h2>
         <label className="block space-y-1">
           <span className="text-sm font-semibold">השם שלך</span>
@@ -39,7 +39,7 @@ export function OnboardingForms() {
         </button>
       </form>
 
-      <form action={joinAction} className="space-y-3 rounded-3xl bg-card p-4 shadow-card">
+      <form action={joinAction} className="space-y-3 panel p-4">
         <h2 className="text-lg font-bold">הצטרפות עם קוד הזמנה</h2>
         <label className="block space-y-1">
           <span className="text-sm font-semibold">השם שלך</span>

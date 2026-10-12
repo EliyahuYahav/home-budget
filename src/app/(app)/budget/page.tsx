@@ -107,7 +107,7 @@ function Group({ title, note, rows }: { title: string; note: string; rows: Categ
         </div>
         <p className="text-sm text-muted">{note}</p>
       </div>
-      <ul className="divide-y divide-line rounded-3xl bg-card shadow-card">
+      <ul className="divide-y divide-line panel">
         {rows.map((row) => (
           <CategoryRow key={row.category.id} row={row} />
         ))}
@@ -174,7 +174,7 @@ export default async function BudgetPage({ searchParams }: PageProps<"/budget">)
       />
       <Group title="הוצאות משתנות" note="לחיצה על שורה פותחת עריכה." rows={flexible} />
 
-      <details className="rounded-3xl bg-card shadow-card">
+      <details className="panel">
         <summary className="flex cursor-pointer items-center gap-3 p-4 font-bold">
           <span className="flex size-8 items-center justify-center rounded-full bg-accent-soft text-accent">
             <PlusIcon className="size-5" />
@@ -209,7 +209,7 @@ export default async function BudgetPage({ searchParams }: PageProps<"/budget">)
       </details>
 
       {hidden.length > 0 && (
-        <details className="rounded-3xl bg-card shadow-card">
+        <details className="panel">
           <summary className="flex cursor-pointer items-center gap-3 p-4 font-bold">
             <span className="flex-1">קטגוריות מוסתרות ({hidden.length})</span>
             <ChevronDown className="chevron text-muted" />

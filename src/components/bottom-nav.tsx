@@ -17,9 +17,9 @@ export function BottomNav() {
   return (
     <nav
       aria-label="ניווט ראשי"
-      className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-card pb-[env(safe-area-inset-bottom)]"
+      className="fixed inset-x-0 bottom-0 z-10 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
     >
-      <ul className="mx-auto flex max-w-lg items-end px-1">
+      <ul className="panel mx-auto flex max-w-lg items-end rounded-[1.75rem] px-1 backdrop-blur-md">
         {TABS.map(({ href, label, Icon, primary }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
@@ -33,7 +33,7 @@ export function BottomNav() {
               >
                 {primary ? (
                   // The bot is how most expenses get in, so it stands above the bar.
-                  <span className="-mt-6 flex size-13 items-center justify-center rounded-full bg-accent text-accent-ink ring-4 ring-bg">
+                  <span className="-mt-6 flex size-13 items-center justify-center rounded-full bg-accent text-accent-ink shadow-card ring-4 ring-card-line">
                     <Icon />
                   </span>
                 ) : (

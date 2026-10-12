@@ -35,13 +35,13 @@ export function DayStrip({
               key={i}
               className={`flex-1 rounded-full ${
                 future
-                  ? "bg-hero-ink/25"
+                  ? "bg-hero-ink/20"
                   : amount === 0
-                    ? "bg-hero-ink/45"
+                    ? "bg-hero-ink/35"
                     : over
-                      ? "bg-[#ffc978]"
-                      : "bg-hero-ink"
-              } ${i === todayIndex ? "outline outline-2 outline-offset-2 outline-hero-ink/70" : ""}`}
+                      ? "bg-coral"
+                      : "bg-hero-ink/80"
+              } ${i === todayIndex ? "outline outline-2 outline-offset-2 outline-hero-ink/50" : ""}`}
               style={{ height: future || amount === 0 ? "4px" : `${height}%` }}
             />
           );
@@ -49,7 +49,7 @@ export function DayStrip({
       </div>
       <div className="mt-1.5 flex justify-between text-xs text-hero-ink/70">
         <span className="num">1</span>
-        <span>{overDays > 0 ? "בכתום: ימים מעל הסכום היומי" : "הוצאות יום־יום, לפי ימים"}</span>
+        <span>{overDays > 0 ? "באדמדם: ימים מעל הסכום היומי" : "הוצאות יום־יום, לפי ימים"}</span>
         <span className="num">{days.length}</span>
       </div>
     </div>

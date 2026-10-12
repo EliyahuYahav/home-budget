@@ -18,7 +18,7 @@ export function CopyCode({ code }: { code: string }) {
 
   return (
     <div className="flex items-center justify-between gap-3">
-      <p className="num font-display text-3xl font-bold tracking-[0.2em]">{code}</p>
+      <p className="num text-2xl font-bold tracking-[0.2em]">{code}</p>
       <button type="button" onClick={copy} className="btn min-h-0 px-3.5 py-2 text-sm" aria-live="polite">
         {copied ? "הועתק" : "העתקה"}
       </button>
