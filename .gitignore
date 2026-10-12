@@ -2,6 +2,11 @@
 
 # dependencies
 /node_modules
+/sync/node_modules
+/sync/sync.log
+/sync/agent.log
+# The home computer's private key: opens the saved bank login details.
+/sync/agent-key.json
 /.pnp
 .pnp.*
 .yarn/*

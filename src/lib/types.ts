@@ -19,7 +19,7 @@ export interface Transaction {
   category_id: string | null;
   description: string;
   occurred_on: string; // YYYY-MM-DD
-  source: "manual" | "chat";
+  source: "manual" | "chat" | "bank";
   created_at: string;
 }
 

@@ -71,9 +71,11 @@ export async function interpretMessage(input: {
   categoryNames: string[];
   today: string;
   monthContext: string;
+  /** False once the household has used up the day's Claude calls; the built-in parser takes over. */
+  allowClaude?: boolean;
 }): Promise<BotInterpretation> {
-  const { text, categoryNames, today, monthContext } = input;
-  if (!isClaudeConfigured()) return fallback(text, categoryNames, today);
+  const { text, categoryNames, today, monthContext, allowClaude = true } = input;
+  if (!allowClaude || !isClaudeConfigured()) return fallback(text, categoryNames, today);
 
   const categoryList =
     categoryNames.map((name, i) => `${i + 1}. ${name}`).join("\n") || "(none defined)";

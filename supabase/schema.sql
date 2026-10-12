@@ -10,6 +10,8 @@ create table if not exists public.households (
   id          uuid primary key default gen_random_uuid(),
   name        text not null,
   invite_code text not null unique default upper(substr(md5(gen_random_uuid()::text), 1, 8)),
+  -- Closed once both partners are in: join_household refuses a third member.
+  max_members int not null default 2,
   created_at  timestamptz not null default now()
 );
 
@@ -56,12 +58,25 @@ create table if not exists public.transactions (
   category_id  uuid references public.categories (id) on delete set null,
   description  text not null default '',
   occurred_on  date not null,
-  source       text not null default 'manual' check (source in ('manual', 'chat')),
+  source       text not null default 'manual' check (source in ('manual', 'chat', 'bank')),
+  -- The bank's or card company's own id for the charge, set by sync/bank-sync.mjs.
+  external_id  text,
   created_at   timestamptz not null default now()
 );
 
+-- For databases created before the bank sync existed.
+alter table public.transactions add column if not exists external_id text;
+alter table public.transactions drop constraint if exists transactions_source_check;
+alter table public.transactions
+  add constraint transactions_source_check check (source in ('manual', 'chat', 'bank'));
+
 create index if not exists transactions_household_date_idx
   on public.transactions (household_id, occurred_on desc);
+
+-- A charge is imported once, however many times the sync reads it.
+create unique index if not exists transactions_external_id_idx
+  on public.transactions (household_id, external_id)
+  where external_id is not null;
 
 create table if not exists public.chat_messages (
   id           uuid primary key default gen_random_uuid(),
@@ -74,6 +89,36 @@ create table if not exists public.chat_messages (
 
 create index if not exists chat_messages_household_idx
   on public.chat_messages (household_id, created_at desc);
+
+-- Bank sync, driven from the app's developer screen and carried out by sync/agent.mjs on
+-- the home computer. `credentials` is the bank login details sealed in the browser with
+-- `public_key`; only the home computer holds the private key that opens them.
+create table if not exists public.bank_sync_settings (
+  household_id           uuid primary key references public.households (id) on delete cascade,
+  public_key             jsonb,
+  credentials            text,
+  credentials_updated_at timestamptz,
+  agent_seen_at          timestamptz
+);
+
+-- One requested sync: the app inserts it as 'queued', the agent runs it and fills in the rest.
+create table if not exists public.bank_sync_runs (
+  id           uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households (id) on delete cascade,
+  requested_by uuid references auth.users (id) on delete set null default auth.uid(),
+  dry_run      boolean not null default true,
+  status       text not null default 'queued' check (status in ('queued', 'running', 'done', 'failed')),
+  output       text not null default '',
+  created_at   timestamptz not null default now(),
+  started_at   timestamptz,
+  finished_at  timestamptz
+);
+
+create index if not exists bank_sync_runs_household_idx
+  on public.bank_sync_runs (household_id, created_at desc);
+
+-- For databases created before the member limit existed.
+alter table public.households add column if not exists max_members int not null default 2;
 
 -- ---------------------------------------------------------------------------
 -- Row level security: a user sees and changes only their own household's rows.
@@ -99,6 +144,24 @@ alter table public.categories        enable row level security;
 alter table public.recurring_incomes enable row level security;
 alter table public.transactions      enable row level security;
 alter table public.chat_messages     enable row level security;
+alter table public.bank_sync_settings enable row level security;
+alter table public.bank_sync_runs     enable row level security;
+
+-- Nothing here is for visitors who are not signed in. Row level security already returns
+-- them nothing; taking the table privileges away as well means a policy mistake alone
+-- cannot expose a table.
+revoke all on public.households, public.household_members, public.categories,
+  public.recurring_incomes, public.transactions, public.chat_messages,
+  public.bank_sync_settings, public.bank_sync_runs
+  from anon;
+
+-- A policy decides which rows may be updated, not which columns. Without these, a member
+-- could move their own membership row to another household's id, or replace the invite
+-- code and member limit. Members may only rename themselves and their household.
+revoke insert, update, delete on public.household_members from authenticated;
+grant update (display_name) on public.household_members to authenticated;
+revoke insert, update, delete on public.households from authenticated;
+grant update (name) on public.households to authenticated;
 
 drop policy if exists households_select on public.households;
 create policy households_select on public.households
@@ -138,6 +201,18 @@ create policy transactions_all on public.transactions
 
 drop policy if exists chat_messages_all on public.chat_messages;
 create policy chat_messages_all on public.chat_messages
+  for all to authenticated
+  using (public.is_household_member(household_id))
+  with check (public.is_household_member(household_id));
+
+drop policy if exists bank_sync_settings_all on public.bank_sync_settings;
+create policy bank_sync_settings_all on public.bank_sync_settings
+  for all to authenticated
+  using (public.is_household_member(household_id))
+  with check (public.is_household_member(household_id));
+
+drop policy if exists bank_sync_runs_all on public.bank_sync_runs;
+create policy bank_sync_runs_all on public.bank_sync_runs
   for all to authenticated
   using (public.is_household_member(household_id))
   with check (public.is_household_member(household_id));
@@ -221,6 +296,11 @@ begin
 
   select id into hid from public.households where invite_code = upper(trim(p_code));
   if hid is null then
+    raise exception 'invalid invite code';
+  end if;
+  -- The same answer as for a wrong code, so a guess learns nothing from a full household.
+  if (select count(*) from public.household_members where household_id = hid)
+     >= (select max_members from public.households where id = hid) then
     raise exception 'invalid invite code';
   end if;
 

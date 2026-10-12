@@ -1,0 +1,17 @@
+{
+  "name": "home-budget-bank-sync",
+  "private": true,
+  "type": "module",
+  "description": "Runs on the home computer: reads bank and credit card transactions into the household budget.",
+  "scripts": {
+    "agent": "node agent.mjs",
+    "sync": "node bank-sync.mjs",
+    "dry-run": "node bank-sync.mjs --dry-run"
+  },
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "dependencies": {
+    "israeli-bank-scrapers-core": "^6.12.2"
+  }
+}

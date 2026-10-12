@@ -88,7 +88,7 @@ export async function joinHousehold(_prev: FormState, form: FormData): Promise<F
   if (error) {
     return {
       error: error.message.includes("invalid invite code")
-        ? "קוד ההזמנה לא נמצא."
+        ? "קוד ההזמנה לא נמצא, או שמשק הבית כבר מלא."
         : `ההצטרפות נכשלה: ${error.message}`,
     };
   }
@@ -244,6 +244,9 @@ export async function deleteRecurringIncome(form: FormData) {
 // Chat bot
 // --------------------------------------------------------------------------
 
+/** Messages per household in 24 hours that go to Claude; beyond that the built-in parser answers. */
+const DAILY_CLAUDE_MESSAGES = 150;
+
 function describeEntry(entry: ParsedEntry, today: string): string {
   const when = entry.date === today ? "היום" : shortDate(entry.date);
   const what = entry.type === "income" ? "הכנסה" : (entry.category ?? "ללא קטגוריה");
@@ -278,11 +281,21 @@ export async function sendChatMessage(
     ),
   ].join("\n");
 
+  // Each message costs a paid Claude call, and anyone who can sign in can send messages.
+  const { count: sentToday, error: countError } = await ctx.supabase
+    .from("chat_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("household_id", ctx.household.id)
+    .eq("role", "user")
+    .gte("created_at", new Date(Date.now() - 86_400_000).toISOString());
+  if (countError) throw new Error(countError.message);
+
   const interpretation = await interpretMessage({
     text: content,
     categoryNames: active.map((c) => c.name),
     today,
     monthContext,
+    allowClaude: (sentToday ?? 0) < DAILY_CLAUDE_MESSAGES,
   });
 
   const idByName = new Map(active.map((c) => [c.name, c.id]));

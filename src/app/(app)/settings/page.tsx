@@ -6,9 +6,11 @@ import {
 } from "@/app/actions";
 import { CopyCode } from "@/components/copy-code";
 import { SubmitButton } from "@/components/submit-button";
+import { VersionRow } from "@/components/version-row";
 import { Card, Money, PageTitle, SectionTitle } from "@/components/ui";
 import { getMembers, getRecurringIncomes, requireContext } from "@/lib/data";
 import { isClaudeConfigured } from "@/lib/env";
+import packageInfo from "../../../../package.json";
 
 export default async function SettingsPage() {
   const ctx = await requireContext();
@@ -92,6 +94,8 @@ export default async function SettingsPage() {
           </SubmitButton>
         </form>
       </Card>
+
+      <VersionRow version={packageInfo.version} />
     </>
   );
 }

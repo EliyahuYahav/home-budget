@@ -204,7 +204,11 @@ export function TransactionList({
                             className={`block truncate text-sm ${missing ? "text-warn" : "text-muted"}`}
                           >
                             {label}
-                            {t.user_id && memberNames[t.user_id] ? `, ${memberNames[t.user_id]}` : ""}
+                            {t.source === "bank"
+                              ? ", מהבנק"
+                              : t.user_id && memberNames[t.user_id]
+                                ? `, ${memberNames[t.user_id]}`
+                                : ""}
                           </span>
                         </span>
                         <span className={`num text-lg font-bold ${income ? "text-good" : ""}`}>
