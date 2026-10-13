@@ -12,9 +12,10 @@ describe("secret box", () => {
   });
 
   it("opens what it sealed, and the sealed text does not contain the secret", () => {
-    const sealed = sealSecret("sk-ant-api03-example");
-    expect(sealed).not.toContain("sk-ant");
-    expect(openSecret(sealed)).toBe("sk-ant-api03-example");
+    const sealed = sealSecret("sk-ant-api03-example key!");
+    // A piece with a space and "!", which sealed text (base64url) can never contain by chance.
+    expect(sealed).not.toContain("example key!");
+    expect(openSecret(sealed)).toBe("sk-ant-api03-example key!");
   });
 
   it("seals the same secret differently each time", () => {

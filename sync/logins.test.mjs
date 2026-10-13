@@ -76,18 +76,19 @@ describe("openLogins", () => {
     const saved = mergeLogins(
       [],
       [
-        { id: "login-1", company: "max", label: "שלי", sealed: await seal(publicKey, JSON.stringify({ username: "me", password: "p1" })) },
-        { id: "login-2", company: "max", label: "של רחל", sealed: await seal(publicKey, JSON.stringify({ username: "her", password: "p2" })) },
+        { id: "login-1", company: "max", label: "שלי", sealed: await seal(publicKey, JSON.stringify({ username: "me", password: "first secret!" })) },
+        { id: "login-2", company: "max", label: "של רחל", sealed: await seal(publicKey, JSON.stringify({ username: "her", password: "second secret!" })) },
       ],
       COMPANIES,
       NOW,
     );
     const text = stringifySaved(saved);
-    expect(text).not.toContain("p1");
+    // A phrase with a space and "!", which sealed text (base64) can never contain by chance.
+    expect(text).not.toContain("first secret!");
     const opened = await openLogins(text, (sealedText) => open(privateKey, sealedText));
     expect(opened).toEqual([
-      { id: "login-1", company: "max", label: "שלי", values: { username: "me", password: "p1" } },
-      { id: "login-2", company: "max", label: "של רחל", values: { username: "her", password: "p2" } },
+      { id: "login-1", company: "max", label: "שלי", values: { username: "me", password: "first secret!" } },
+      { id: "login-2", company: "max", label: "של רחל", values: { username: "her", password: "second secret!" } },
     ]);
   });
 
