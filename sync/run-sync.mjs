@@ -82,6 +82,7 @@ export function sinceMonthsBack(months) {
   return israelDate(date.toISOString());
 }
 
+const TIMEOUT_ATTEMPTS = 3;
 const PAGE = 1000;
 const WRITE_BATCH = 200;
 
@@ -166,14 +167,25 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
   const scraped = [];
   const failures = [];
   for (const source of sources) {
-    try {
-      const result = await scrape(source, since, chrome, showBrowser);
-      const count = result.accounts.reduce((sum, account) => sum + account.txns.length, 0);
-      log(`- ${source.id}: ${count} transactions in ${result.accounts.length} account(s)`);
-      scraped.push(result);
-    } catch (error) {
-      log(`- ${source.id}: failed (${error.message})`);
-      failures.push(source.id);
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        const result = await scrape(source, since, chrome, showBrowser);
+        const count = result.accounts.reduce((sum, account) => sum + account.txns.length, 0);
+        log(`- ${source.id}: ${count} transactions in ${result.accounts.length} account(s)`);
+        scraped.push(result);
+        break;
+      } catch (error) {
+        // The library gives a site a fixed 20 seconds to answer after signing in, which a slow
+        // connection can miss. Only a timeout is tried again: a refused password never is,
+        // because repeated wrong passwords can lock the account.
+        if (/^TIMEOUT/.test(error.message) && attempt < TIMEOUT_ATTEMPTS) {
+          log(`- ${source.id}: the site was slow to answer, trying again (${attempt + 1} of ${TIMEOUT_ATTEMPTS})`);
+          continue;
+        }
+        log(`- ${source.id}: failed (${error.message})`);
+        failures.push(source.id);
+        break;
+      }
     }
   }
 
