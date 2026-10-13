@@ -9,12 +9,18 @@ import { SubmitButton } from "@/components/submit-button";
 import { VersionRow } from "@/components/version-row";
 import { Card, Money, PageTitle, SectionTitle } from "@/components/ui";
 import { getMembers, getRecurringIncomes, requireContext } from "@/lib/data";
-import { isClaudeConfigured } from "@/lib/env";
+import { ClaudeKeyForm } from "@/components/claude-key-form";
+import { resolveClaudeKey } from "@/lib/claude-key";
+import { isSecretBoxConfigured } from "@/lib/secret-box";
 import packageInfo from "../../../../package.json";
 
 export default async function SettingsPage() {
   const ctx = await requireContext();
-  const [incomes, members] = await Promise.all([getRecurringIncomes(ctx), getMembers(ctx)]);
+  const [incomes, members, claudeKey] = await Promise.all([
+    getRecurringIncomes(ctx),
+    getMembers(ctx),
+    resolveClaudeKey(ctx),
+  ]);
   const totalIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
 
   return (
@@ -75,6 +81,34 @@ export default async function SettingsPage() {
       </Card>
 
       <Card className="space-y-3">
+        <SectionTitle>הבוט ו־Claude</SectionTitle>
+        <p className="text-muted">
+          {claudeKey.source === "household" ? (
+            <>
+              הבוט עובד עם המפתח שלכם (מסתיים ב־<span className="num">{claudeKey.hint}</span>), והשימוש מחויב
+              בחשבון ה־Anthropic שלכם.
+            </>
+          ) : claudeKey.source === "shared" ? (
+            "הבוט עובד עם המפתח של מי שמפעיל את האתר, עד 150 הודעות ביום. עם מפתח משלכם אין הגבלה."
+          ) : (
+            "הבוט פועל בזיהוי בסיסי, בלי Claude: הוא מבין הודעות פשוטות כמו \"סופר 230\", אבל לא שאלות או ניסוחים חופשיים."
+          )}
+        </p>
+        {claudeKey.unreadable && (
+          <p className="rounded-2xl bg-warn-soft p-3 text-sm">
+            שמור אצלכם מפתח (מסתיים ב־<span className="num">{claudeKey.hint}</span>), אבל האתר לא מצליח לפתוח
+            אותו. שמרו אותו מחדש.
+          </p>
+        )}
+        <ClaudeKeyForm hasKey={claudeKey.source === "household" || claudeKey.unreadable} canSave={isSecretBoxConfigured()} />
+        <p className="text-sm text-muted">
+          מפתח יוצרים ב־platform.claude.com, תחת API keys, וכדאי להגדיר שם גם תקרת הוצאה. המפתח נשמר מוצפן
+          ולא מוצג שוב. הודעה לבוט עולה בערך אלפית שקל.
+          {!isSecretBoxConfigured() && " שמירת מפתחות עוד לא הוגדרה באתר הזה."}
+        </p>
+      </Card>
+
+      <Card className="space-y-3">
         <SectionTitle>החשבון שלי</SectionTitle>
         <form action={updateDisplayName} className="flex items-end gap-3">
           <label className="flex-1 space-y-1">
@@ -83,11 +117,6 @@ export default async function SettingsPage() {
           </label>
           <SubmitButton className="btn btn-quiet">שמירה</SubmitButton>
         </form>
-        <p className="text-sm text-muted">
-          {isClaudeConfigured()
-            ? "הבוט מחובר ל־Claude."
-            : "הבוט פועל בזיהוי בסיסי, בלי Claude."}
-        </p>
         <form action={signOut}>
           <SubmitButton className="btn btn-danger w-full" pendingLabel="יוצא…">
             יציאה מהחשבון

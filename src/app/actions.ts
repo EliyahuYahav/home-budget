@@ -2,10 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import Anthropic from "@anthropic-ai/sdk";
 import { interpretMessage } from "@/lib/bot";
+import { resolveClaudeKey } from "@/lib/claude-key";
 import { formatILS, isCashCategory, summarizeMonth } from "@/lib/budget";
 import { getMonthData, requireContext } from "@/lib/data";
 import { isValidDate, monthOf, shortDate, todayISO } from "@/lib/dates";
+import { isSecretBoxConfigured, sealSecret } from "@/lib/secret-box";
 import { createClient } from "@/lib/supabase/server";
 import type { ChatMessage, ParsedEntry } from "@/lib/types";
 
@@ -244,10 +247,54 @@ export async function deleteRecurringIncome(form: FormData) {
 }
 
 // --------------------------------------------------------------------------
+// The household's own Claude API key
+// --------------------------------------------------------------------------
+
+export async function saveClaudeKey(_prev: FormState, form: FormData): Promise<FormState> {
+  const ctx = await requireContext();
+  const apiKey = text(form, "apiKey");
+  if (!isSecretBoxConfigured()) return { error: "שמירת מפתחות לא הוגדרה באתר הזה (חסר SECRETS_KEY)." };
+  if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(apiKey)) {
+    return { error: "זה לא נראה כמו מפתח של Claude. מפתח מתחיל ב־sk-ant-." };
+  }
+
+  // One cheap request, so a mistyped or revoked key is caught now and not in the middle of a chat.
+  try {
+    await new Anthropic({ apiKey, maxRetries: 1 }).models.list({ limit: 1 });
+  } catch (error) {
+    if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
+      return { error: "Anthropic דחתה את המפתח. בדקו שהעתקתם אותו במלואו ושהוא פעיל." };
+    }
+    return { error: "לא הצלחתי לבדוק את המפתח מול Anthropic. נסו שוב בעוד רגע." };
+  }
+
+  const { error } = await ctx.supabase.from("household_secrets").upsert({
+    household_id: ctx.household.id,
+    claude_key: sealSecret(apiKey),
+    claude_key_hint: apiKey.slice(-4),
+    updated_at: new Date().toISOString(),
+  });
+  if (error) return { error: `המפתח לא נשמר: ${error.message}` };
+  revalidateApp();
+  return { message: "המפתח נבדק ונשמר. הבוט עובד עכשיו על החשבון שלכם." };
+}
+
+export async function removeClaudeKey(): Promise<FormState> {
+  const ctx = await requireContext();
+  const { error } = await ctx.supabase
+    .from("household_secrets")
+    .update({ claude_key: null, claude_key_hint: null, updated_at: new Date().toISOString() })
+    .eq("household_id", ctx.household.id);
+  if (error) return { error: `המפתח לא הוסר: ${error.message}` };
+  revalidateApp();
+  return { message: "המפתח הוסר." };
+}
+
+// --------------------------------------------------------------------------
 // Chat bot
 // --------------------------------------------------------------------------
 
-/** Messages per household in 24 hours that go to Claude; beyond that the built-in parser answers. */
+/** Messages per household in 24 hours that go to Claude on the deployment's key; beyond that the built-in parser answers. */
 const DAILY_CLAUDE_MESSAGES = 150;
 
 function describeEntry(entry: ParsedEntry, today: string): string {
@@ -284,21 +331,28 @@ export async function sendChatMessage(
     ),
   ].join("\n");
 
-  // Each message costs a paid Claude call, and anyone who can sign in can send messages.
-  const { count: sentToday, error: countError } = await ctx.supabase
-    .from("chat_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("household_id", ctx.household.id)
-    .eq("role", "user")
-    .gte("created_at", new Date(Date.now() - 86_400_000).toISOString());
-  if (countError) throw new Error(countError.message);
+  const claudeKey = await resolveClaudeKey(ctx);
+  // On the deployment's own key each message is paid for by whoever runs the site, and anyone
+  // who can sign in can send messages. A household on its own key pays for itself.
+  let sentToday = 0;
+  if (claudeKey.source === "shared") {
+    const { count, error: countError } = await ctx.supabase
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("household_id", ctx.household.id)
+      .eq("role", "user")
+      .gte("created_at", new Date(Date.now() - 86_400_000).toISOString());
+    if (countError) throw new Error(countError.message);
+    sentToday = count ?? 0;
+  }
 
   const interpretation = await interpretMessage({
     text: content,
     categoryNames: active.map((c) => c.name),
     today,
     monthContext,
-    allowClaude: (sentToday ?? 0) < DAILY_CLAUDE_MESSAGES,
+    allowClaude: sentToday < DAILY_CLAUDE_MESSAGES,
+    apiKey: claudeKey.source === "household" ? claudeKey.apiKey : null,
   });
 
   const idByName = new Map(active.map((c) => [c.name, c.id]));

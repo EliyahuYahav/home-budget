@@ -120,6 +120,15 @@ create table if not exists public.bank_sync_runs (
   finished_at  timestamptz
 );
 
+-- A household's own Claude API key, for the bot. Sealed by the server with a key that is
+-- only in its environment (src/lib/secret-box.ts), so the stored text is useless on its own.
+create table if not exists public.household_secrets (
+  household_id    uuid primary key references public.households (id) on delete cascade,
+  claude_key      text,
+  claude_key_hint text,
+  updated_at      timestamptz not null default now()
+);
+
 create index if not exists bank_sync_runs_household_idx
   on public.bank_sync_runs (household_id, created_at desc);
 
@@ -155,13 +164,14 @@ alter table public.transactions      enable row level security;
 alter table public.chat_messages     enable row level security;
 alter table public.bank_sync_settings enable row level security;
 alter table public.bank_sync_runs     enable row level security;
+alter table public.household_secrets  enable row level security;
 
 -- Nothing here is for visitors who are not signed in. Row level security already returns
 -- them nothing; taking the table privileges away as well means a policy mistake alone
 -- cannot expose a table.
 revoke all on public.households, public.household_members, public.categories,
   public.recurring_incomes, public.transactions, public.chat_messages,
-  public.bank_sync_settings, public.bank_sync_runs
+  public.bank_sync_settings, public.bank_sync_runs, public.household_secrets
   from anon;
 
 -- A policy decides which rows may be updated, not which columns. Without these, a member
@@ -216,6 +226,12 @@ create policy chat_messages_all on public.chat_messages
 
 drop policy if exists bank_sync_settings_all on public.bank_sync_settings;
 create policy bank_sync_settings_all on public.bank_sync_settings
+  for all to authenticated
+  using (public.is_household_member(household_id))
+  with check (public.is_household_member(household_id));
+
+drop policy if exists household_secrets_all on public.household_secrets;
+create policy household_secrets_all on public.household_secrets
   for all to authenticated
   using (public.is_household_member(household_id))
   with check (public.is_household_member(household_id));

@@ -144,6 +144,18 @@ expect("a sync can be asked to read half a year back", r.ok && r.rows[0].months_
 r = await as("A", "insert into public.bank_sync_runs (household_id, months_back) values ($1, 60)", [hidA]);
 expect("a sync cannot be asked for more than a year", !r.ok, show(r));
 
+// --- a household's own Claude key
+r = await as("B", "insert into public.household_secrets (household_id, claude_key, claude_key_hint) values ($1, 'v1.sealed', 'abcd')", [hidB]);
+expect("a household can save its sealed Claude key", r.ok, show(r));
+r = await as("A", "select * from public.household_secrets where household_id = $1", [hidB]);
+expect("other household cannot read B's sealed key", r.ok && r.rows.length === 0, show(r));
+r = await as("A", "update public.household_secrets set claude_key = 'v1.other' where household_id = $1", [hidB]);
+expect("other household cannot replace B's key", blocked(r), show(r));
+r = await as("A", "insert into public.household_secrets (household_id, claude_key) values ($1, 'v1.x') on conflict (household_id) do update set claude_key = excluded.claude_key", [hidB]);
+expect("other household cannot plant a key for B", !r.ok, show(r));
+r = await as("anon", "select * from public.household_secrets");
+expect("signed-out visitor cannot read household_secrets", !r.ok, show(r));
+
 // --- reset: a household can clear its own rows, and only its own
 r = await as("A", "delete from public.transactions where household_id = $1", [hidA]);
 expect("a household can delete all of its own transactions", r.ok && r.affected === 3, show(r));

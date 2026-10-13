@@ -75,15 +75,17 @@ export async function interpretMessage(input: {
   monthContext: string;
   /** False once the household has used up the day's Claude calls; the built-in parser takes over. */
   allowClaude?: boolean;
+  /** The household's own key. Without it the deployment's key is used, when there is one. */
+  apiKey?: string | null;
 }): Promise<BotInterpretation> {
-  const { text, categoryNames, today, monthContext, allowClaude = true } = input;
-  if (!allowClaude || !isClaudeConfigured()) return fallback(text, categoryNames, today);
+  const { text, categoryNames, today, monthContext, allowClaude = true, apiKey } = input;
+  if (!allowClaude || (!apiKey && !isClaudeConfigured())) return fallback(text, categoryNames, today);
 
   const categoryList =
     categoryNames.map((name, i) => `${i + 1}. ${name}`).join("\n") || "(none defined)";
 
   try {
-    const client = new Anthropic();
+    const client = apiKey ? new Anthropic({ apiKey }) : new Anthropic();
     const response = await client.messages.parse({
       model: MODEL,
       max_tokens: 4096,
