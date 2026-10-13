@@ -207,7 +207,7 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     log(`Income from these payers, paid in the last days of a month, counts for the next month: ${nextMonthPayers.join("; ")}.`);
   }
 
-  const { candidates, accounts, skipped } = toCandidates(scraped, {
+  const { candidates, accounts, skipped, replacedByCard } = toCandidates(scraped, {
     cards: sources.filter((source) => source.kind === "card").map((source) => source.company),
     importIncome: process.env.IMPORT_INCOME !== "off",
     nextMonthPayers,
@@ -237,9 +237,13 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     if (data.length < PAGE) break;
   }
 
+  // A card's charge pays for roughly the month before it, so only charges dated a month and a
+  // half into the period read are sure to have all their purchases read too.
+  const cardCoveredFrom = israelDate(new Date(Date.parse(since) + 45 * 86_400_000).toISOString());
   const plan = planImport(
     candidates,
     existing.map((row) => ({ ...row, amount: Number(row.amount) })),
+    { replacedByCard, cardCoveredFrom },
   );
 
   const { data: categories, error: categoriesError } = await supabase
@@ -286,6 +290,9 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
         `(income at the very end of a month is counted for the next one)`,
     );
   }
+  for (const { line } of plan.removals) {
+    log(`  x ${line}  (was imported as one expense; the card is read now, so it is ${dryRun ? "to be " : ""}removed)`);
+  }
   for (const { candidate } of plan.links) {
     log(`  = ${candidate.date}  ${candidate.amount.toFixed(2).padStart(9)}  ${candidate.description}  (already written by hand)`);
   }
@@ -305,6 +312,15 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
       const { error } = await supabase.from("transactions").insert(rows.slice(start, start + WRITE_BATCH));
       // Rows saved before a failure stay; the next run recognises them and adds only the rest.
       if (error) throw new Error(`Saving the new rows failed after ${start} of ${rows.length}: ${error.message}`);
+    }
+    if (plan.removals.length > 0) {
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .in("id", plan.removals.map((removal) => removal.id))
+        .eq("household_id", householdId)
+        .eq("source", "bank");
+      if (error) throw new Error(`Removing replaced card charges failed: ${error.message}`);
     }
     for (const { id, candidate } of plan.moves) {
       const { error } = await supabase
@@ -334,7 +350,8 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
   const verb = dryRun ? "would be added" : "added";
   log(
     `${plan.inserts.length} ${verb}, ${plan.links.length} matched to hand-written rows, ${plan.known.length} already imported, ` +
-      `${plan.moves.length} income(s) ${dryRun ? "would be " : ""}moved to the next month. ` +
+      `${plan.moves.length} income(s) ${dryRun ? "would be " : ""}moved to the next month, ` +
+      `${plan.removals.length} card charge(s) ${dryRun ? "would be " : ""}replaced by the card's own purchases. ` +
       `Left out: ${skipped.pending} pending, ${skipped.credits} incoming, ${skipped.cardCharges.length} card charges in the bank account, ` +
       `${skipped.ownTransfers.length} transfers between your own accounts.`,
   );

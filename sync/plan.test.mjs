@@ -215,6 +215,19 @@ describe("toCandidates", () => {
     expect(skipped.cardCharges).toEqual(["2026-10-05 15.85 חיוב לכרטיס ויזה 0541"]);
   });
 
+  it("reports a card charge as replaced only when that card answered in this run", () => {
+    const bank = source(
+      [txn({ identifier: 5, description: "מקס איט פיננסים", chargedAmount: -341.8 }), txn({ identifier: 6, description: "חיוב לכרטיס ויזה 0541", chargedAmount: -15.85 })],
+      { company: "discount", kind: "bank" },
+    );
+    const card = { company: "max", kind: "card", accounts: [{ accountNumber: "0541", txns: [] }] };
+    expect(toCandidates([bank, card]).replacedByCard.map((c) => c.externalId)).toEqual(["discount:1234:5", "discount:1234:6"]);
+    // Max is set up but did not answer: its charge is still left out, and nothing is replaced.
+    const alone = toCandidates([bank], { cards: ["max"] });
+    expect(alone.skipped.cardCharges).toHaveLength(1);
+    expect(alone.replacedByCard).toEqual([]);
+  });
+
   it("recognises a card's name printed with dots", () => {
     const bank = source([txn({ description: "כ.א.ל חיוב" })], { company: "discount", kind: "bank" });
     const { candidates } = toCandidates([bank], { cards: ["visaCal"] });
@@ -270,7 +283,7 @@ describe("planImport", () => {
 
   it("does nothing for a transaction imported on an earlier run", () => {
     const plan = planImport([candidate()], [row({ external_id: "max:1234:1001" })]);
-    expect(plan).toEqual({ inserts: [], links: [], known: [candidate()], repeated: [], moves: [] });
+    expect(plan).toEqual({ inserts: [], links: [], known: [candidate()], repeated: [], moves: [], removals: [] });
   });
 
   it("attaches the bank id to the same purchase written by hand a day earlier", () => {
@@ -294,6 +307,18 @@ describe("planImport", () => {
     expect(planImport([salary], [stored]).moves).toEqual([{ id: "salary", candidate: salary }]);
     expect(planImport([salary], [{ ...stored, occurred_on: "2026-11-01" }]).moves).toEqual([]);
     expect(planImport([salary], [{ ...stored, occurred_on: "2026-10-15" }]).moves).toEqual([]);
+  });
+
+  it("takes out a card charge imported as one expense once the card itself is read", () => {
+    const stored = row({ id: "lump", external_id: "discount:1:77", amount: 900, occurred_on: "2026-10-11" });
+    const replacedByCard = [{ externalId: "discount:1:77", date: "2026-10-11", line: "2026-10-11 900.00 כאל" }];
+    expect(planImport([], [stored], { replacedByCard, cardCoveredFrom: "2026-06-01" }).removals).toEqual([
+      { id: "lump", line: "2026-10-11 900.00 כאל" },
+    ]);
+    // Too close to the start of what was read: the purchases behind it were not all read.
+    expect(planImport([], [stored], { replacedByCard, cardCoveredFrom: "2026-11-01" }).removals).toEqual([]);
+    // Never imported, so there is nothing to take out.
+    expect(planImport([], [], { replacedByCard, cardCoveredFrom: "2026-06-01" }).removals).toEqual([]);
   });
 
   it("matches income only to income written by hand", () => {

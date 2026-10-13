@@ -102,8 +102,11 @@ function ownTransfers(sources) {
  *   `nextMonthPayers` are pieces of text the household chose (the army, an employer): an income
  *   in a bank account whose description contains one, dated within the last `lateIncomeDays`
  *   days of a month, is counted on the 1st of the next. Any other income keeps its date.
- * @returns {{ candidates: Candidate[], accounts: AccountCount[], skipped: { pending: number, credits: number, cardCharges: string[], ownTransfers: string[] } }}
+ * @returns {{ candidates: Candidate[], accounts: AccountCount[], skipped: { pending: number, credits: number, cardCharges: string[], ownTransfers: string[] }, replacedByCard: { externalId: string, date: string, line: string }[] }}
  *   `accounts` says, for each account read, how many lines there were and what became of them.
+ *   `replacedByCard` are card charges in the bank account whose card was read in this very run.
+ *   One imported earlier as a single expense, before the card was connected, now stands for
+ *   purchases that are listed one by one (planImport decides which of them to take out).
  */
 export function toCandidates(sources, options = {}) {
   const cards = options.cards ?? sources.filter((s) => s.kind === "card").map((s) => s.company);
@@ -112,11 +115,15 @@ export function toCandidates(sources, options = {}) {
   const nextMonthPayers = (options.nextMonthPayers ?? []).map((payer) => payer.trim().toLowerCase()).filter(Boolean);
   const paidForNextMonth = (name) => nextMonthPayers.some((payer) => name.toLowerCase().includes(payer));
   const candidates = [];
+  const replacedByCard = [];
+  const readCards = new Set(sources.filter((source) => source.kind === "card").map((source) => source.company));
   const counts = [];
   const transfers = ownTransfers(sources);
   const skipped = { pending: 0, credits: 0, cardCharges: [], ownTransfers: transfers.described };
   const seen = new Map();
   const cardCharge = cards.map((company) => CARD_CHARGE[company]).filter(Boolean);
+  // The same patterns, for the cards that actually answered in this run.
+  const readCardCharge = [...readCards].map((company) => CARD_CHARGE[company]).filter(Boolean);
   // Banks also name a card by its last digits ("חיוב לכרטיס ויזה 0541") without naming the
   // company, so the digits of every card read in this run are recognised too.
   const cardDigits = sources
@@ -152,8 +159,17 @@ export function toCandidates(sources, options = {}) {
           kind === "bank" &&
           (cardCharge.some((pattern) => pattern.test(plainName(name))) || namesCard(name))
         ) {
-          skipped.cardCharges.push(`${israelDate(txn.date)} ${(-txn.chargedAmount).toFixed(2)} ${name}`);
+          const line = `${israelDate(txn.date)} ${(-txn.chargedAmount).toFixed(2)} ${name}`;
+          skipped.cardCharges.push(line);
           count.cardCharges += 1;
+          const cardWasRead = namesCard(name) || readCardCharge.some((pattern) => pattern.test(plainName(name)));
+          if (cardWasRead && txn.identifier != null && txn.identifier !== "") {
+            replacedByCard.push({
+              externalId: `${company}:${accountNumber}:${txn.identifier}`,
+              date: israelDate(txn.date),
+              line,
+            });
+          }
           continue;
         }
         if (type === "income") count.income += 1;
@@ -193,7 +209,7 @@ export function toCandidates(sources, options = {}) {
       }
     }
   }
-  return { candidates, accounts: counts, skipped };
+  return { candidates, accounts: counts, skipped, replacedByCard };
 }
 
 /** How far apart the bank's date and a hand-written entry's date may be and still be one purchase. */
@@ -206,6 +222,11 @@ export const MATCH_DAYS = 2;
  *
  * @param {Candidate[]} candidates
  * @param {ExistingRow[]} existing
+ * @param {{ replacedByCard?: { externalId: string, date: string, line: string }[], cardCoveredFrom?: string }} [options]
+ *   Card charges that were imported as one expense and are now read purchase by purchase are
+ *   returned in `removals`, so the money is not counted twice. Only charges dated on or after
+ *   `cardCoveredFrom` are taken out: an older charge pays for purchases from before the period
+ *   this run read, and removing it would lose that spending.
  * @returns {{ inserts: Candidate[], links: { id: string, candidate: Candidate }[], known: Candidate[], repeated: Candidate[], moves: { id: string, candidate: Candidate }[] }}
  *   `moves` are incomes imported before, still on the bank's date, that are now counted on
  *   the 1st of the next month. A row the user has put on some other date is left alone.
@@ -213,7 +234,7 @@ export const MATCH_DAYS = 2;
  *   very read: either the bank listed one line twice, or its ids are not unique and a real
  *   transaction is being dropped, which is worth seeing rather than hiding.
  */
-export function planImport(candidates, existing) {
+export function planImport(candidates, existing, options = {}) {
   const knownRows = new Map(existing.filter((row) => row.external_id).map((row) => [row.external_id, row]));
   const seenNow = new Set();
   const moves = [];
@@ -252,5 +273,10 @@ export function planImport(candidates, existing) {
       inserts.push(candidate);
     }
   }
-  return { inserts, links, known, repeated, moves };
+  const removals = [];
+  for (const charge of options.replacedByCard ?? []) {
+    const row = knownRows.get(charge.externalId);
+    if (row && options.cardCoveredFrom && charge.date >= options.cardCoveredFrom) removals.push({ id: row.id, line: charge.line });
+  }
+  return { inserts, links, known, repeated, moves, removals };
 }
