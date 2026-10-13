@@ -2,7 +2,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { isValidDate } from "./dates";
-import { isClaudeConfigured } from "./env";
 import { parseMessageFallback } from "./parse-fallback";
 import type { ParsedEntry } from "./types";
 
@@ -73,19 +72,17 @@ export async function interpretMessage(input: {
   categoryNames: string[];
   today: string;
   monthContext: string;
-  /** False once the household has used up the day's Claude calls; the built-in parser takes over. */
-  allowClaude?: boolean;
-  /** The household's own key. Without it the deployment's key is used, when there is one. */
-  apiKey?: string | null;
+  /** The household's own Claude key. Without one the built-in parser answers. */
+  apiKey: string | null;
 }): Promise<BotInterpretation> {
-  const { text, categoryNames, today, monthContext, allowClaude = true, apiKey } = input;
-  if (!allowClaude || (!apiKey && !isClaudeConfigured())) return fallback(text, categoryNames, today);
+  const { text, categoryNames, today, monthContext, apiKey } = input;
+  if (!apiKey) return fallback(text, categoryNames, today);
 
   const categoryList =
     categoryNames.map((name, i) => `${i + 1}. ${name}`).join("\n") || "(none defined)";
 
   try {
-    const client = apiKey ? new Anthropic({ apiKey }) : new Anthropic();
+    const client = new Anthropic({ apiKey });
     const response = await client.messages.parse({
       model: MODEL,
       max_tokens: 4096,

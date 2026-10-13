@@ -294,9 +294,6 @@ export async function removeClaudeKey(): Promise<FormState> {
 // Chat bot
 // --------------------------------------------------------------------------
 
-/** Messages per household in 24 hours that go to Claude on the deployment's key; beyond that the built-in parser answers. */
-const DAILY_CLAUDE_MESSAGES = 150;
-
 function describeEntry(entry: ParsedEntry, today: string): string {
   const when = entry.date === today ? "היום" : shortDate(entry.date);
   const what = entry.type === "income" ? "הכנסה" : (entry.category ?? "ללא קטגוריה");
@@ -332,27 +329,13 @@ export async function sendChatMessage(
   ].join("\n");
 
   const claudeKey = await resolveClaudeKey(ctx);
-  // On the deployment's own key each message is paid for by whoever runs the site, and anyone
-  // who can sign in can send messages. A household on its own key pays for itself.
-  let sentToday = 0;
-  if (claudeKey.source === "shared") {
-    const { count, error: countError } = await ctx.supabase
-      .from("chat_messages")
-      .select("id", { count: "exact", head: true })
-      .eq("household_id", ctx.household.id)
-      .eq("role", "user")
-      .gte("created_at", new Date(Date.now() - 86_400_000).toISOString());
-    if (countError) throw new Error(countError.message);
-    sentToday = count ?? 0;
-  }
 
   const interpretation = await interpretMessage({
     text: content,
     categoryNames: active.map((c) => c.name),
     today,
     monthContext,
-    allowClaude: sentToday < DAILY_CLAUDE_MESSAGES,
-    apiKey: claudeKey.source === "household" ? claudeKey.apiKey : null,
+    apiKey: claudeKey.apiKey,
   });
 
   const idByName = new Map(active.map((c) => [c.name, c.id]));

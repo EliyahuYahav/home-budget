@@ -15,7 +15,7 @@ export default async function ChatPage() {
       initialMessages={messages}
       memberNames={Object.fromEntries(members.map((m) => [m.user_id, m.display_name]))}
       currentUserId={ctx.userId}
-      smartBot={claudeKey.source !== "none"}
+      smartBot={claudeKey.apiKey !== null}
     />
   );
 }

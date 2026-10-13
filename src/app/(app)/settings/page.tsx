@@ -85,15 +85,13 @@ export default async function SettingsPage() {
       <Card className="space-y-3">
         <SectionTitle>הבוט ו־Claude</SectionTitle>
         <p className="text-muted">
-          {claudeKey.source === "household" ? (
+          {claudeKey.apiKey ? (
             <>
               הבוט עובד עם המפתח שלכם (מסתיים ב־<span className="num">{claudeKey.hint}</span>), והשימוש מחויב
               בחשבון ה־Anthropic שלכם.
             </>
-          ) : claudeKey.source === "shared" ? (
-            "הבוט עובד עם המפתח של מי שמפעיל את האתר, עד 150 הודעות ביום. עם מפתח משלכם אין הגבלה."
           ) : (
-            "הבוט פועל בזיהוי בסיסי, בלי Claude: הוא מבין הודעות פשוטות כמו \"סופר 230\", אבל לא שאלות או ניסוחים חופשיים."
+            "הבוט פועל בזיהוי בסיסי: הוא מבין הודעות פשוטות כמו \"סופר 230\", אבל לא שאלות או ניסוחים חופשיים. כדי שיבין הכול, מוסיפים מפתח Claude משלכם."
           )}
         </p>
         {claudeKey.unreadable && (
@@ -102,7 +100,7 @@ export default async function SettingsPage() {
             אותו. שמרו אותו מחדש.
           </p>
         )}
-        <ClaudeKeyForm hasKey={claudeKey.source === "household" || claudeKey.unreadable} canSave={isSecretBoxConfigured()} />
+        <ClaudeKeyForm hasKey={claudeKey.hint !== null} canSave={isSecretBoxConfigured()} />
         <p className="text-sm text-muted">
           <Link href="/help#claude-key" className="font-semibold text-accent underline">
             איך משיגים מפתח, צעד אחר צעד
