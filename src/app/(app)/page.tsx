@@ -36,6 +36,7 @@ export default async function HomePage() {
         </div>
         <Link
           href="/settings"
+          data-tour="settings"
           className="panel flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold"
         >
           <GearIcon className="size-5 text-accent" />
@@ -43,9 +44,7 @@ export default async function HomePage() {
         </Link>
       </header>
 
-      <section
-        className={`hero space-y-4 p-5 ${overBudget ? "hero-over" : ""}`}
-      >
+      <section data-tour="today" className={`hero space-y-4 p-5 ${overBudget ? "hero-over" : ""}`}>
         <div>
           <h2 className="text-sm font-semibold tracking-[0.2em] text-hero-ink/75">מותר להוציא היום</h2>
           <p className="num font-display text-[6.5rem] font-bold leading-[0.9]">
@@ -71,26 +70,28 @@ export default async function HomePage() {
 
       <QuickAdd />
 
-      <Card className="grid grid-cols-3 !p-0 text-center">
-        <div className="p-3">
-          <p className="text-sm text-muted">{summary.incomeIsEstimated ? "הכנסות (הערכה)" : "הכנסות"}</p>
-          <p className="font-display text-3xl font-bold">
-            <Money amount={summary.income} />
-          </p>
-        </div>
-        <div className="border-s border-line p-3">
-          <p className="text-sm text-muted">הוצאות</p>
-          <p className="font-display text-3xl font-bold">
-            <Money amount={summary.spent} />
-          </p>
-        </div>
-        <div className="border-s border-line p-3">
-          <p className="text-sm text-muted">נשאר</p>
-          <p className={`font-display text-3xl font-bold ${summary.remaining < 0 ? "text-danger" : ""}`}>
-            <Money amount={summary.remaining} />
-          </p>
-        </div>
-      </Card>
+      <div data-tour="numbers">
+        <Card className="grid grid-cols-3 !p-0 text-center">
+          <div className="p-3">
+            <p className="text-sm text-muted">{summary.incomeIsEstimated ? "הכנסות (הערכה)" : "הכנסות"}</p>
+            <p className="font-display text-3xl font-bold">
+              <Money amount={summary.income} />
+            </p>
+          </div>
+          <div className="border-s border-line p-3">
+            <p className="text-sm text-muted">הוצאות</p>
+            <p className="font-display text-3xl font-bold">
+              <Money amount={summary.spent} />
+            </p>
+          </div>
+          <div className="border-s border-line p-3">
+            <p className="text-sm text-muted">נשאר</p>
+            <p className={`font-display text-3xl font-bold ${summary.remaining < 0 ? "text-danger" : ""}`}>
+              <Money amount={summary.remaining} />
+            </p>
+          </div>
+        </Card>
+      </div>
 
       {summary.incomeIsEstimated && (
         <p className="rounded-3xl bg-warn-soft p-4 text-[0.95rem]">

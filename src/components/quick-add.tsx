@@ -59,7 +59,7 @@ export function QuickAdd() {
 
   return (
     <div className="space-y-2">
-      <form onSubmit={onSubmit} className="panel flex gap-2 rounded-full p-1.5 ps-4 focus-within:outline-2 focus-within:outline-accent">
+      <form onSubmit={onSubmit} data-tour="quick-add" className="panel flex gap-2 rounded-full p-1.5 ps-4 focus-within:outline-2 focus-within:outline-accent">
         <label className="sr-only" htmlFor="quick-add">
           מה הוצאתם?
         </label>

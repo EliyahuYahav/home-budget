@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChevronDown } from "@/components/icons";
+import { ReplayTourButton } from "@/components/tour";
 import { PageTitle } from "@/components/ui";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/env";
 
@@ -55,6 +56,8 @@ export default function HelpPage() {
         שני דברים שמגדירים פעם אחת: מפתח ל־Claude, כדי שהבוט יבין ניסוח חופשי, וסוכן במחשב בבית, למי שרוצה
         שההוצאות ייקראו לבד מהבנק. האפליקציה עובדת גם בלי שניהם.
       </p>
+
+      <ReplayTourButton />
 
       <Guide
         id="claude-key"
