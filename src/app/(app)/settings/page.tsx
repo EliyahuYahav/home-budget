@@ -191,7 +191,7 @@ export default async function SettingsPage() {
 
       <Card className="space-y-3">
         <SectionTitle>החשבון שלי</SectionTitle>
-        <form action={updateDisplayName} className="flex items-end gap-3">
+        <form key={ctx.displayName} action={updateDisplayName} className="flex items-end gap-3">
           <label className="flex-1 space-y-1">
             <span className="text-sm font-semibold">השם שלי</span>
             <input className="field" name="displayName" defaultValue={ctx.displayName} required />

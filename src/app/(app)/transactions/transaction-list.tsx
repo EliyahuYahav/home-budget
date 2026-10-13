@@ -264,7 +264,15 @@ export function TransactionList({
                         </span>
                       </summary>
 
-                      <form action={updateTransaction} className="grid grid-cols-2 gap-3 px-3.5 pb-3.5">
+                      {/* A new form whenever the saved values change. After a save React puts
+                          every field back to the default it was first given, so without this the
+                          category box went back to the old choice while the row above showed the
+                          new one, and saving again wrote the old one back. */}
+                      <form
+                        key={`${t.amount}|${t.occurred_on}|${t.category_id}|${t.description}|${t.paid_in_cash}`}
+                        action={updateTransaction}
+                        className="grid grid-cols-2 gap-3 px-3.5 pb-3.5"
+                      >
                         <input type="hidden" name="id" value={t.id} />
                         <label className="space-y-1">
                           <span className="text-sm font-semibold">סכום</span>

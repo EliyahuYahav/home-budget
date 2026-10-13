@@ -51,7 +51,13 @@ function CategoryRow({ row }: { row: CategoryStatus }) {
           </p>
         </summary>
 
-        <form action={saveCategory} className="grid grid-cols-2 gap-3 px-3.5 pb-3.5">
+        {/* A new form whenever the saved values change: after a save React resets each field
+            to the default it was first given, which would show the old choice again. */}
+        <form
+          key={`${category.name}|${category.monthly_budget}|${category.kind}|${category.is_fixed}`}
+          action={saveCategory}
+          className="grid grid-cols-2 gap-3 px-3.5 pb-3.5"
+        >
           <input type="hidden" name="id" value={category.id} />
           <label className="space-y-1">
             <span className="text-sm font-semibold">שם</span>
