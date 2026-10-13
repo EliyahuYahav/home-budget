@@ -1,5 +1,5 @@
 export interface BankSource {
-  /** The name the login is saved under; sync/run-sync.mjs lists the same names and fields. */
+  /** The company's name in the sync; sync/run-sync.mjs lists the same companies and fields. */
   company: string;
   label: string;
   fields: { key: string; label: string; secret?: boolean }[];
@@ -40,7 +40,6 @@ export const BANKS: BankSource[] = [
 
 export const CARDS: BankSource[] = [
   source("max", "מקס", ["username", "password"]),
-  source("max2", "מקס, חשבון שני", ["username", "password"]),
   source("visaCal", "כאל", ["username", "password"]),
   source("isracard", "ישראכרט", ["id", "card6Digits", "password"]),
   source("amex", "אמריקן אקספרס", ["id", "card6Digits", "password"]),

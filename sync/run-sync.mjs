@@ -16,13 +16,14 @@ export const here = dirname(fileURLToPath(import.meta.url));
 /** A problem the user fixes in the settings, as opposed to a run that went wrong. */
 export class SetupError extends Error {}
 
-// The logins the sync can use: `id` is the name the login details are saved under, `company`
-// is the site it signs in to. A second login at the same company (each partner's own Max
-// account, say) is its own entry. The website's form (src/lib/bank-sources.ts) lists the same.
+// The companies the sync can sign in to, with the login fields each asks for. A household can
+// have several logins at one company (each partner's own Max account, two banks); those are
+// separate entries in what is saved, not here. The website's form (src/lib/bank-sources.ts)
+// lists the same companies and fields.
 // Only Discount and Max have been run against a real account; the rest are listed with the
 // login fields the library documents. One Zero is left out: it signs in with a one-time code.
-const bank = (id, fields) => ({ id, company: id, kind: "bank", fields });
-const card = (id, fields, company = id) => ({ id, company, kind: "card", fields });
+const bank = (company, fields) => ({ company, kind: "bank", fields });
+const card = (company, fields) => ({ company, kind: "card", fields });
 export const SOURCES = [
   bank("discount", ["id", "password", "num"]),
   bank("hapoalim", ["userCode", "password"]),
@@ -35,7 +36,6 @@ export const SOURCES = [
   bank("yahav", ["username", "nationalID", "password"]),
   bank("pagi", ["username", "password"]),
   card("max", ["username", "password"]),
-  card("max2", ["username", "password"], "max"),
   card("visaCal", ["username", "password"]),
   card("isracard", ["id", "card6Digits", "password"]),
   card("amex", ["id", "card6Digits", "password"]),
@@ -87,22 +87,32 @@ const PAGE = 1000;
 const WRITE_BATCH = 200;
 
 /**
- * Checks login details given as { id: { field: value } } and returns the sources to read.
- * A login with every field empty is simply not used.
+ * Checks opened logins ({ id, company, label, values }) and returns the sources to read.
+ * A login with every field empty is simply not used. Each source gets a `name` for the
+ * output: the company, with the user's label or a running number when there are several.
  */
-export function sourcesFrom(credentials, where) {
+export function sourcesFrom(logins, where) {
   const sources = [];
-  for (const source of SOURCES) {
-    const given = credentials[source.id] ?? {};
-    const filled = source.fields.filter((field) => given[field]);
+  const perCompany = new Map();
+  for (const login of logins) {
+    const known = SOURCES.find((source) => source.company === login.company);
+    if (!known) throw new SetupError(`${login.company} in ${where} is not a company the sync knows.`);
+    const given = login.values ?? {};
+    const filled = known.fields.filter((field) => given[field]);
     if (filled.length === 0) continue;
-    if (filled.length < source.fields.length) {
-      const missing = source.fields.filter((field) => !given[field]).join(", ");
-      throw new SetupError(`${source.id} is only partly filled in ${where}: ${missing} is missing.`);
+
+    const count = (perCompany.get(known.company) ?? 0) + 1;
+    perCompany.set(known.company, count);
+    const name = login.label ? `${known.company} (${login.label})` : count > 1 ? `${known.company} #${count}` : known.company;
+    if (filled.length < known.fields.length) {
+      const missing = known.fields.filter((field) => !given[field]).join(", ");
+      throw new SetupError(`${name} is only partly filled in ${where}: ${missing} is missing.`);
     }
     sources.push({
-      ...source,
-      credentials: Object.fromEntries(source.fields.map((field) => [field, String(given[field])])),
+      ...known,
+      id: login.id,
+      name,
+      credentials: Object.fromEntries(known.fields.map((field) => [field, String(given[field])])),
     });
   }
   return sources;
@@ -171,7 +181,7 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
       try {
         const result = await scrape(source, since, chrome, showBrowser);
         const count = result.accounts.reduce((sum, account) => sum + account.txns.length, 0);
-        log(`- ${source.id}: ${count} transactions in ${result.accounts.length} account(s)`);
+        log(`- ${source.name}: ${count} transactions in ${result.accounts.length} account(s)`);
         scraped.push(result);
         break;
       } catch (error) {
@@ -179,11 +189,11 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
         // connection can miss. Only a timeout is tried again: a refused password never is,
         // because repeated wrong passwords can lock the account.
         if (/^TIMEOUT/.test(error.message) && attempt < TIMEOUT_ATTEMPTS) {
-          log(`- ${source.id}: the site was slow to answer, trying again (${attempt + 1} of ${TIMEOUT_ATTEMPTS})`);
+          log(`- ${source.name}: the site was slow to answer, trying again (${attempt + 1} of ${TIMEOUT_ATTEMPTS})`);
           continue;
         }
-        log(`- ${source.id}: failed (${error.message})`);
-        failures.push(source.id);
+        log(`- ${source.name}: failed (${error.message})`);
+        failures.push(source.name);
         break;
       }
     }

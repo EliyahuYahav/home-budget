@@ -11,7 +11,8 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { credentialsFromEnv } from "./bank-sync.mjs";
+import { loginsFromEnv } from "./bank-sync.mjs";
+import { openLogins } from "./logins.mjs";
 import { SetupError, findChrome, here, loadEnvFiles, redact, runSync, secretsOf, signIn, sinceMonthsBack, sourcesFrom } from "./run-sync.mjs";
 import { fingerprint, generateKeyPair, open } from "./seal.mjs";
 
@@ -77,16 +78,16 @@ async function main() {
       .eq("household_id", householdId)
       .maybeSingle();
     check(error, "Reading the saved details failed");
-    if (!data?.credentials) return sourcesFrom(credentialsFromEnv(), "sync/.env");
-    let text;
+    if (!data?.credentials) return sourcesFrom(loginsFromEnv(), "sync/.env");
+    let logins;
     try {
-      text = await open(key.privateKey, data.credentials);
+      logins = await openLogins(data.credentials, (sealed) => open(key.privateKey, sealed));
     } catch {
       throw new SetupError(
         "The saved bank details cannot be opened with this computer's key. Save them again in the developer screen.",
       );
     }
-    return sourcesFrom(JSON.parse(text), "the developer screen");
+    return sourcesFrom(logins, "the developer screen");
   }
 
   async function execute(run) {

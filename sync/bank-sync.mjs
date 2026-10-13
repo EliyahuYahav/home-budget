@@ -9,14 +9,21 @@
 
 import { SOURCES, SetupError, defaultSince, findChrome, loadEnvFiles, runSync, signIn, sourcesFrom } from "./run-sync.mjs";
 
-/** Login details from variables such as DISCOUNT_ID and MAX_PASSWORD. */
-export function credentialsFromEnv() {
-  return Object.fromEntries(
-    SOURCES.map(({ id, fields }) => [
-      id,
-      Object.fromEntries(fields.map((field) => [field, process.env[`${id}_${field}`.toUpperCase()] ?? ""])),
-    ]),
-  );
+/**
+ * Logins from variables such as DISCOUNT_ID and MAX_PASSWORD. A second login at the same
+ * company takes a number after the name: MAX_2_USERNAME, MAX_2_PASSWORD, and so on.
+ */
+export function loginsFromEnv() {
+  const logins = [];
+  for (const { company, fields } of SOURCES) {
+    for (const suffix of ["", "_2", "_3", "_4"]) {
+      const values = Object.fromEntries(
+        fields.map((field) => [field, process.env[`${company}${suffix}_${field}`.toUpperCase()] ?? ""]),
+      );
+      if (Object.values(values).some(Boolean)) logins.push({ id: `${company}${suffix}`, company, label: "", values });
+    }
+  }
+  return logins;
 }
 
 async function main() {
@@ -25,7 +32,7 @@ async function main() {
   if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new SetupError("--since takes a date like 2026-10-01.");
 
   loadEnvFiles();
-  const sources = sourcesFrom(credentialsFromEnv(), "sync/.env");
+  const sources = sourcesFrom(loginsFromEnv(), "sync/.env");
   if (sources.length === 0) {
     throw new SetupError("No bank or card is filled in. Add the login details to sync/.env.");
   }
@@ -43,7 +50,7 @@ async function main() {
   });
 }
 
-// Only when started directly, so agent.mjs can import credentialsFromEnv.
+// Only when started directly, so agent.mjs can import loginsFromEnv.
 if (process.argv[1] && import.meta.filename === process.argv[1]) {
   main().catch((error) => {
     console.error(error instanceof SetupError ? `Setup: ${error.message}` : `Sync failed: ${error.message}`);
