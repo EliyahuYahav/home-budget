@@ -12,6 +12,8 @@
     "node": ">=22.22.2"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
+    "@supabase/supabase-js": "^2.117.3",
     "israeli-bank-scrapers-core": "^6.12.2"
   }
 }
