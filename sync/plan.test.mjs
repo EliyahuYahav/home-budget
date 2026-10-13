@@ -31,11 +31,38 @@ describe("toCandidates", () => {
       {
         externalId: "max:1234:1001",
         company: "max",
+        account: "1234",
         type: "expense",
         amount: 230,
         date: "2026-10-05",
         description: "שופרסל דיל",
       },
+    ]);
+  });
+
+  it("counts, for each account, what became of its lines", () => {
+    const bank = {
+      company: "discount",
+      kind: "bank",
+      accounts: [
+        {
+          accountNumber: "111",
+          txns: [
+            txn({ identifier: 1, chargedAmount: -2000, description: "העברה" }),
+            txn({ identifier: 2, description: "מקס איט פיננסים" }),
+            txn({ identifier: 3, chargedAmount: 9000, description: "משכורת" }),
+          ],
+        },
+        {
+          accountNumber: "222",
+          txns: [txn({ identifier: 4, chargedAmount: 2000 }), txn({ identifier: 5 }), txn({ identifier: 6, status: "pending" })],
+        },
+      ],
+    };
+    const { accounts } = toCandidates([bank], { cards: ["max"] });
+    expect(accounts).toEqual([
+      { company: "discount", account: "111", lines: 3, expenses: 0, income: 1, pending: 0, cardCharges: 1, ownTransfers: 1 },
+      { company: "discount", account: "222", lines: 3, expenses: 1, income: 0, pending: 1, cardCharges: 0, ownTransfers: 1 },
     ]);
   });
 
@@ -146,6 +173,7 @@ describe("planImport", () => {
   const candidate = (over = {}) => ({
     externalId: "max:1234:1001",
     company: "max",
+    account: "1234",
     type: "expense",
     amount: 230,
     date: "2026-10-05",
@@ -165,12 +193,12 @@ describe("planImport", () => {
     const plan = planImport([candidate()], []);
     expect(plan.inserts).toHaveLength(1);
     expect(plan.links).toHaveLength(0);
-    expect(plan.known).toBe(0);
+    expect(plan.known).toHaveLength(0);
   });
 
   it("does nothing for a transaction imported on an earlier run", () => {
     const plan = planImport([candidate()], [row({ external_id: "max:1234:1001" })]);
-    expect(plan).toEqual({ inserts: [], links: [], known: 1 });
+    expect(plan).toEqual({ inserts: [], links: [], known: [candidate()], repeated: [] });
   });
 
   it("attaches the bank id to the same purchase written by hand a day earlier", () => {
@@ -208,9 +236,11 @@ describe("planImport", () => {
     expect(plan.links[0].id).toBe("near");
   });
 
-  it("imports a transaction once even when the scraper lists it twice", () => {
-    const plan = planImport([candidate(), candidate()], []);
-    expect(plan.inserts).toHaveLength(1);
-    expect(plan.known).toBe(1);
+  it("imports a transaction once when its id comes twice in one read, and reports the second", () => {
+    const second = candidate({ amount: 75, description: "קפה" });
+    const plan = planImport([candidate(), second], []);
+    expect(plan.inserts).toEqual([candidate()]);
+    expect(plan.known).toHaveLength(0);
+    expect(plan.repeated).toEqual([second]);
   });
 });

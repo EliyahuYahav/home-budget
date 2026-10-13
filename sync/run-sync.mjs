@@ -199,7 +199,7 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     }
   }
 
-  const { candidates, skipped } = toCandidates(scraped, {
+  const { candidates, accounts, skipped } = toCandidates(scraped, {
     cards: sources.filter((source) => source.kind === "card").map((source) => source.company),
     importIncome: process.env.IMPORT_INCOME !== "off",
   });
@@ -241,6 +241,24 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     .eq("kind", "expense")
     .order("sort_order");
   if (categoriesError) throw new Error(categoriesError.message);
+  // Per account, what was read and what became of it: the first place to look when an
+  // account seems to be missing.
+  const tally = (list, account) => list.filter((c) => c.company === account.company && c.account === account.account).length;
+  for (const account of accounts) {
+    log(
+      `  account ...${String(account.account).slice(-4)} (${account.company}): ${account.lines} lines = ` +
+        `${account.expenses} expenses, ${account.income} incoming, ${account.pending} pending, ` +
+        `${account.ownTransfers} transfers between your accounts, ${account.cardCharges} card charges. ` +
+        `New: ${tally(plan.inserts, account)}, already in the app: ${tally(plan.known, account) + tally(plan.links.map((l) => l.candidate), account)}.`,
+    );
+  }
+  for (const candidate of plan.repeated) {
+    log(
+      `  ! ${candidate.date}  ${candidate.amount.toFixed(2).padStart(9)}  ${candidate.description}  ` +
+        `(account ...${String(candidate.account).slice(-4)}: the bank gave this line the same id as another one, so it was NOT added)`,
+    );
+  }
+
   // Only expenses are filed under a category.
   const expenses = plan.inserts.filter((candidate) => candidate.type === "expense");
   const expenseCategories = await categorize(expenses, categories, log);
@@ -292,10 +310,13 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
 
   const verb = dryRun ? "would be added" : "added";
   log(
-    `${plan.inserts.length} ${verb}, ${plan.links.length} matched to hand-written rows, ${plan.known} already imported. ` +
+    `${plan.inserts.length} ${verb}, ${plan.links.length} matched to hand-written rows, ${plan.known.length} already imported. ` +
       `Left out: ${skipped.pending} pending, ${skipped.credits} incoming, ${skipped.cardCharges.length} card charges in the bank account, ` +
       `${skipped.ownTransfers.length} transfers between your own accounts.`,
   );
+  if (plan.repeated.length > 0) {
+    log(`${plan.repeated.length} line(s) were left out because the bank's ids repeat. They are marked with "!" above.`);
+  }
   if (failures.length > 0) throw new Error(`Could not read: ${failures.join(", ")}.`);
 }
 

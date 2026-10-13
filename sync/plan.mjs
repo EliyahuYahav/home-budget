@@ -3,7 +3,8 @@
 
 /**
  * @typedef {{ company: string, kind: "bank" | "card", accounts: { accountNumber: string, txns: any[] }[] }} ScrapedSource
- * @typedef {{ externalId: string, company: string, type: "expense" | "income", amount: number, date: string, description: string }} Candidate
+ * @typedef {{ externalId: string, company: string, account: string, type: "expense" | "income", amount: number, date: string, description: string }} Candidate
+ * @typedef {{ company: string, account: string, lines: number, expenses: number, income: number, pending: number, cardCharges: number, ownTransfers: number }} AccountCount
  * @typedef {{ id: string, external_id: string | null, type: string, amount: number, occurred_on: string }} ExistingRow
  */
 
@@ -81,12 +82,14 @@ function ownTransfers(sources) {
  * @param {ScrapedSource[]} sources
  * @param {{ cards?: string[], importIncome?: boolean }} [options] `cards` are the card
  *   companies set up for reading, whether or not this run reached them.
- * @returns {{ candidates: Candidate[], skipped: { pending: number, credits: number, cardCharges: string[], ownTransfers: string[] } }}
+ * @returns {{ candidates: Candidate[], accounts: AccountCount[], skipped: { pending: number, credits: number, cardCharges: string[], ownTransfers: string[] } }}
+ *   `accounts` says, for each account read, how many lines there were and what became of them.
  */
 export function toCandidates(sources, options = {}) {
   const cards = options.cards ?? sources.filter((s) => s.kind === "card").map((s) => s.company);
   const importIncome = options.importIncome ?? true;
   const candidates = [];
+  const counts = [];
   const transfers = ownTransfers(sources);
   const skipped = { pending: 0, credits: 0, cardCharges: [], ownTransfers: transfers.described };
   const seen = new Map();
@@ -94,12 +97,19 @@ export function toCandidates(sources, options = {}) {
 
   for (const { company, kind, accounts } of sources) {
     for (const { accountNumber, txns } of accounts) {
+      const count = { company, account: accountNumber, lines: txns.length, expenses: 0, income: 0, pending: 0, cardCharges: 0, ownTransfers: 0 };
+      counts.push(count);
       for (const txn of txns) {
         if (txn.status !== "completed") {
           skipped.pending += 1;
+          count.pending += 1;
           continue;
         }
-        if (transfers.paired.has(txn) || !txn.chargedAmount) continue;
+        if (transfers.paired.has(txn)) {
+          count.ownTransfers += 1;
+          continue;
+        }
+        if (!txn.chargedAmount) continue;
         const type = txn.chargedAmount < 0 ? "expense" : "income";
         if (type === "income" && !importIncome) {
           skipped.credits += 1;
@@ -108,8 +118,11 @@ export function toCandidates(sources, options = {}) {
         const name = String(txn.description ?? "").trim();
         if (type === "expense" && kind === "bank" && cardCharge.some((pattern) => pattern.test(plainName(name)))) {
           skipped.cardCharges.push(`${israelDate(txn.date)} ${(-txn.chargedAmount).toFixed(2)} ${name}`);
+          count.cardCharges += 1;
           continue;
         }
+        if (type === "income") count.income += 1;
+        else count.expenses += 1;
 
         const amount = cents(Math.abs(txn.chargedAmount)) / 100;
         const date = israelDate(txn.date);
@@ -132,6 +145,7 @@ export function toCandidates(sources, options = {}) {
         candidates.push({
           externalId: key,
           company,
+          account: accountNumber,
           type,
           amount,
           date,
@@ -140,7 +154,7 @@ export function toCandidates(sources, options = {}) {
       }
     }
   }
-  return { candidates, skipped };
+  return { candidates, accounts: counts, skipped };
 }
 
 /** How far apart the bank's date and a hand-written entry's date may be and still be one purchase. */
@@ -153,22 +167,31 @@ export const MATCH_DAYS = 2;
  *
  * @param {Candidate[]} candidates
  * @param {ExistingRow[]} existing
- * @returns {{ inserts: Candidate[], links: { id: string, candidate: Candidate }[], known: number }}
+ * @returns {{ inserts: Candidate[], links: { id: string, candidate: Candidate }[], known: Candidate[], repeated: Candidate[] }}
+ *   `known` are already in the app. `repeated` carry the same id as an earlier line of this
+ *   very read: either the bank listed one line twice, or its ids are not unique and a real
+ *   transaction is being dropped, which is worth seeing rather than hiding.
  */
 export function planImport(candidates, existing) {
   const knownIds = new Set(existing.map((row) => row.external_id).filter(Boolean));
+  const seenNow = new Set();
   const free = existing.filter((row) => !row.external_id);
   const taken = new Set();
   const inserts = [];
   const links = [];
-  let known = 0;
+  const known = [];
+  const repeated = [];
 
   for (const candidate of candidates) {
-    if (knownIds.has(candidate.externalId)) {
-      known += 1;
+    if (seenNow.has(candidate.externalId)) {
+      repeated.push(candidate);
       continue;
     }
-    knownIds.add(candidate.externalId);
+    seenNow.add(candidate.externalId);
+    if (knownIds.has(candidate.externalId)) {
+      known.push(candidate);
+      continue;
+    }
 
     let best = null;
     for (const row of free) {
@@ -185,5 +208,5 @@ export function planImport(candidates, existing) {
       inserts.push(candidate);
     }
   }
-  return { inserts, links, known };
+  return { inserts, links, known, repeated };
 }
