@@ -73,7 +73,7 @@ export default async function HomePage() {
 
       <Card className="grid grid-cols-3 !p-0 text-center">
         <div className="p-3">
-          <p className="text-sm text-muted">הכנסות</p>
+          <p className="text-sm text-muted">{summary.incomeIsEstimated ? "הכנסות (הערכה)" : "הכנסות"}</p>
           <p className="font-display text-3xl font-bold">
             <Money amount={summary.income} />
           </p>
@@ -94,10 +94,13 @@ export default async function HomePage() {
 
       {summary.incomeIsEstimated && (
         <p className="rounded-3xl bg-warn-soft p-4 text-[0.95rem]">
-          עדיין לא הוגדרו הכנסות, אז החישוב נשען על סך התקציב המתוכנן.{" "}
+          עוד לא נרשמה הכנסה החודש, אז בינתיים החישוב מניח שההכנסה שווה לסך התקציב שתכננתם (
+          <Money amount={summary.income} />
+          ). המספר יתחלף בהכנסה האמיתית אחרי סנכרון מהבנק, או כשרושמים הכנסה בבוט או{" "}
           <Link href="/settings" className="font-bold underline">
-            להגדרת הכנסות
+            מגדירים הכנסה קבועה
           </Link>
+          .
         </p>
       )}
 
