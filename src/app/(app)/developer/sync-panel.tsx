@@ -1,20 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "@/components/icons";
 import { Card, SectionTitle } from "@/components/ui";
-import { BANKS, CARDS, type BankSource } from "@/lib/bank-sources";
-import { fingerprint, seal } from "../../../../sync/seal.mjs";
 import {
-  clearBankCredentials,
   exportHouseholdData,
   getSyncState,
   requestSync,
   resetHouseholdData,
-  saveBankCredentials,
   type SyncRun,
   type SyncState,
 } from "./actions";
+import { LoginsForm } from "./logins-form";
 
 const timeFormat = new Intl.DateTimeFormat("he-IL", {
   timeZone: "Asia/Jerusalem",
@@ -23,18 +20,6 @@ const timeFormat = new Intl.DateTimeFormat("he-IL", {
   hour: "2-digit",
   minute: "2-digit",
 });
-
-// The key code this device last sealed bank details with. A different code later means the
-// key in the database was replaced, by a new home computer or by someone else.
-const TRUSTED_KEY = "bank-sync-key-code";
-
-function readTrustedKey() {
-  try {
-    return localStorage.getItem(TRUSTED_KEY);
-  } catch {
-    return null;
-  }
-}
 
 const RANGES = [
   { months: 1, label: "חודש אחורה" },
@@ -61,27 +46,6 @@ const STATUS_LABEL: Record<SyncRun["status"], string> = {
   failed: "נכשל",
 };
 
-function SourceFields({ source }: { source: BankSource }) {
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      {source.fields.map((field) => (
-        <label key={field.key} className="space-y-1">
-          <span className="text-sm font-semibold">{field.label}</span>
-          <input
-            className="field"
-            name={`${source.company}.${field.key}`}
-            type={field.secret ? "password" : "text"}
-            dir="ltr"
-            autoComplete="off"
-            autoCapitalize="off"
-            spellCheck={false}
-          />
-        </label>
-      ))}
-    </div>
-  );
-}
-
 /** A section of the screen that opens and closes, like a category on the budget screen. */
 function Fold({
   title,
@@ -107,51 +71,14 @@ function Fold({
   );
 }
 
-/** One login inside the details form. Closed fields are still sent with the form. */
-function SourceFold({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <details className="rounded-2xl border border-line">
-      <summary className="flex cursor-pointer items-center gap-3 p-3 font-semibold">
-        <span className="flex-1">{title}</span>
-        <ChevronDown className="chevron shrink-0 text-muted" />
-      </summary>
-      <div className="space-y-3 px-3 pb-3">{children}</div>
-    </details>
-  );
-}
-
 export function SyncPanel({ initialState }: { initialState: SyncState }) {
   const [state, setState] = useState(initialState);
-  const [bank, setBank] = useState(BANKS[0].company);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const outputRef = useRef<HTMLPreElement>(null);
   const [monthsBack, setMonthsBack] = useState(1);
   const [resetText, setResetText] = useState("");
-  const [keyCode, setKeyCode] = useState("");
-  const [trustedCode, setTrustedCode] = useState<string | null>(null);
-  const [codeConfirmed, setCodeConfirmed] = useState(false);
-
-  const keyId = state.publicKey?.n ?? "";
-  useEffect(() => {
-    let cancelled = false;
-    const publicKey = state.publicKey;
-    const work = publicKey ? fingerprint(publicKey) : Promise.resolve("");
-    void work.then((code) => {
-      if (cancelled) return;
-      setKeyCode(code);
-      setTrustedCode(readTrustedKey());
-      setCodeConfirmed(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // The key is re-sent with every refresh; only a different key needs a new code.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyId]);
-  const keyChanged = trustedCode !== null && keyCode !== "" && trustedCode !== keyCode;
-
   const latest = state.runs[0];
   const active = latest?.status === "queued" || latest?.status === "running";
 
@@ -192,49 +119,6 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
       return false;
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function onSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const publicKey = state.publicKey;
-    if (!publicKey) return;
-
-    const values = new FormData(form);
-    const credentials: Record<string, Record<string, string>> = {};
-    for (const source of [...BANKS.filter((b) => b.company === bank), ...CARDS]) {
-      const filled = Object.fromEntries(
-        source.fields.map((field) => [field.key, String(values.get(`${source.company}.${field.key}`) ?? "").trim()]),
-      );
-      const count = Object.values(filled).filter(Boolean).length;
-      if (count === 0) continue;
-      if (count < source.fields.length) {
-        setError(`חסרים פרטים עבור ${source.label}. ממלאים את כל השדות או משאירים את כולם ריקים.`);
-        return;
-      }
-      credentials[source.company] = filled;
-    }
-    if (Object.keys(credentials).length === 0) {
-      setError("לא מולאו פרטים.");
-      return;
-    }
-
-    const saved = await act(
-      // Sealed here, in the browser: the server and the database only ever get the sealed text.
-      async () => saveBankCredentials(await seal(publicKey, JSON.stringify(credentials))),
-      "הפרטים לא נשמרו. בדקו את החיבור ונסו שוב.",
-    );
-    if (saved) {
-      form.reset();
-      setNotice("הפרטים נשמרו מוצפנים.");
-      try {
-        localStorage.setItem(TRUSTED_KEY, keyCode);
-      } catch {
-        // Without storage the code is simply confirmed again next time.
-      }
-      setTrustedCode(keyCode);
-      setCodeConfirmed(false);
     }
   }
 
@@ -294,81 +178,27 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
         title="פרטי כניסה"
         aside={
           <span className="text-sm text-muted">
-            {state.credentialsSavedAt
-              ? `נשמרו ב־${timeFormat.format(new Date(state.credentialsSavedAt))}`
-              : "לא נשמרו"}
+            {state.logins.length > 0
+              ? state.logins.length === 1
+                ? "חשבון אחד שמור"
+                : `${state.logins.length} חשבונות שמורים`
+              : state.legacyLogins
+                ? "שמורים בפורמט הקודם"
+                : "לא נשמרו"}
           </span>
         }
       >
-        <p className="text-sm text-muted">
-          הפרטים מוצפנים כאן בדפדפן, לפני השליחה, עם מפתח שרק המחשב בבית יכול לפתוח. במסד נשמר רק הטקסט
-          המוצפן, ולכן אי אפשר להציג אותם שוב. שמירה מחליפה את כל מה שנשמר קודם, אז כדי לשנות או
-          להוסיף כרטיס ממלאים מחדש את כל הפרטים. כרטיס שאין לכם משאירים ריק.
-        </p>
-        {state.publicKey ? (
-          <form onSubmit={onSave} className="space-y-3">
-            <SourceFold title="חשבון הבנק">
-              <label className="block space-y-1">
-                <span className="text-sm font-semibold">בנק</span>
-                <select className="field" value={bank} onChange={(event) => setBank(event.target.value)}>
-                  {BANKS.map((b) => (
-                    <option key={b.company} value={b.company}>
-                      {b.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {BANKS.filter((b) => b.company === bank).map((source) => (
-                <SourceFields key={source.company} source={source} />
-              ))}
-            </SourceFold>
-            {CARDS.map((source) => (
-              <SourceFold key={source.company} title={`כרטיס אשראי: ${source.label}`}>
-                <SourceFields source={source} />
-              </SourceFold>
-            ))}
-            <div className={`space-y-2 rounded-2xl p-3 text-sm ${keyChanged ? "bg-danger-soft" : "bg-accent-soft"}`}>
-              <p>
-                קוד המפתח של המחשב בבית: <span className="num font-bold">{keyCode || "…"}</span>
-              </p>
-              <p className={keyChanged ? "font-semibold text-danger" : "text-muted"}>
-                {keyChanged
-                  ? "הקוד שונה מזה שאיתו נשמרו הפרטים בפעם הקודמת במכשיר הזה. אם לא החלפתם מחשב או מחקתם את קובץ המפתח, אל תמלאו פרטים."
-                  : "הסוכן מדפיס את אותו קוד בחלון שלו כשהוא עולה. ממלאים פרטים רק כשהקודים זהים."}
-              </p>
-              {trustedCode !== keyCode && (
-                <label className="flex items-center gap-2.5 font-semibold">
-                  <input
-                    type="checkbox"
-                    className="size-5 accent-accent"
-                    checked={codeConfirmed}
-                    onChange={(event) => setCodeConfirmed(event.target.checked)}
-                  />
-                  השוויתי, הקוד זהה לזה שבחלון הסוכן
-                </label>
-              )}
-            </div>
-            <div className="flex gap-3">
-              <button className="btn flex-1" disabled={busy || !keyCode || (trustedCode !== keyCode && !codeConfirmed)}>
-                שמירה מוצפנת
-              </button>
-              {state.credentialsSavedAt && (
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  disabled={busy}
-                  onClick={() => void act(clearBankCredentials, "המחיקה לא הצליחה.")}
-                >
-                  מחיקה
-                </button>
-              )}
-            </div>
-          </form>
-        ) : (
-          <p className="rounded-2xl bg-warn-soft p-3 text-sm">
-            אפשר למלא פרטים רק אחרי שהמחשב בבית התחבר פעם אחת, כי ההצפנה נעשית עם המפתח שלו.
-          </p>
-        )}
+        <LoginsForm
+          publicKey={state.publicKey}
+          logins={state.logins}
+          legacy={state.legacyLogins}
+          busy={busy}
+          act={act}
+          report={(kind, text) => {
+            setError(kind === "error" ? text : "");
+            setNotice(kind === "notice" ? text : "");
+          }}
+        />
       </Fold>
 
       <Fold

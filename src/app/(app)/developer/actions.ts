@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { BANKS, CARDS } from "@/lib/bank-sources";
 import { requireContext } from "@/lib/data";
+import { mergeLogins, parseSaved, stringifySaved } from "../../../../sync/logins.mjs";
 
 export interface SyncRun {
   id: string;
@@ -12,6 +14,21 @@ export interface SyncRun {
   finished_at: string | null;
 }
 
+export interface SavedLogin {
+  id: string;
+  company: string;
+  label: string;
+  savedAt: string;
+}
+
+/** A login as the form sends it: `sealed` in the browser, or absent when only the label changed. */
+export interface LoginChange {
+  id: string;
+  company: string;
+  label: string;
+  sealed?: string;
+}
+
 export interface SyncState {
   /** False until supabase/schema.sql has been run again with the sync tables. */
   schemaReady: boolean;
@@ -19,7 +36,10 @@ export interface SyncState {
   publicKey: JsonWebKey | null;
   agentOnline: boolean;
   agentSeenAt: string | null;
-  credentialsSavedAt: string | null;
+  /** The saved bank and card logins: which company and what the user called it, never the details. */
+  logins: SavedLogin[];
+  /** Details saved before logins were kept one by one. They still work, and the first new save replaces them. */
+  legacyLogins: boolean;
   runs: SyncRun[];
   /** How much the household has stored, shown before a reset. */
   stored: { transactions: number; chatMessages: number };
@@ -33,7 +53,7 @@ export async function getSyncState(): Promise<SyncState> {
   const [settings, runs] = await Promise.all([
     ctx.supabase
       .from("bank_sync_settings")
-      .select("public_key, credentials_updated_at, agent_seen_at")
+      .select("public_key, credentials, agent_seen_at")
       .eq("household_id", ctx.household.id)
       .maybeSingle(),
     ctx.supabase
@@ -60,55 +80,67 @@ export async function getSyncState(): Promise<SyncState> {
       publicKey: null,
       agentOnline: false,
       agentSeenAt: null,
-      credentialsSavedAt: null,
+      logins: [],
+      legacyLogins: false,
       runs: [],
       stored,
     };
   }
 
   const seenAt: string | null = settings.data?.agent_seen_at ?? null;
+  const saved = parseSaved(settings.data?.credentials);
   return {
     schemaReady: true,
     publicKey: (settings.data?.public_key as JsonWebKey | null) ?? null,
     agentOnline: seenAt !== null && Date.now() - Date.parse(seenAt) < ONLINE_WITHIN_MS,
     agentSeenAt: seenAt,
-    credentialsSavedAt: settings.data?.credentials_updated_at ?? null,
+    // The sealed details stay on the server; the browser has no use for them.
+    logins: saved.logins.map(({ id, company, label, savedAt }) => ({ id, company, label, savedAt })),
+    legacyLogins: saved.legacy,
     runs: (runs.data ?? []) as SyncRun[],
     stored,
   };
 }
 
-/** Stores login details already sealed in the browser. The server never sees them in the clear. */
-export async function saveBankCredentials(sealed: string): Promise<SyncState> {
-  const ctx = await requireContext();
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(sealed);
-  } catch {
-    parsed = null;
-  }
-  const shape = parsed as { v?: unknown; key?: unknown; iv?: unknown; data?: unknown } | null;
-  const valid =
-    sealed.length <= 20_000 &&
-    shape?.v === 1 &&
-    [shape.key, shape.iv, shape.data].every((part) => typeof part === "string" && part !== "");
-  if (!valid) throw new Error("The login details did not arrive sealed.");
+const COMPANIES = [...BANKS, ...CARDS].map((source) => source.company);
 
+async function readSaved(ctx: Awaited<ReturnType<typeof requireContext>>) {
+  const { data, error } = await ctx.supabase
+    .from("bank_sync_settings")
+    .select("credentials")
+    .eq("household_id", ctx.household.id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("the home computer has not connected yet");
+  return parseSaved(data.credentials);
+}
+
+async function writeSaved(ctx: Awaited<ReturnType<typeof requireContext>>, logins: ReturnType<typeof parseSaved>["logins"]) {
   const { error } = await ctx.supabase
     .from("bank_sync_settings")
-    .update({ credentials: sealed, credentials_updated_at: new Date().toISOString() })
+    .update({ credentials: stringifySaved(logins), credentials_updated_at: new Date().toISOString() })
     .eq("household_id", ctx.household.id);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Saves the logins the user filled in, each already sealed in the browser, and leaves every
+ * other saved login as it is. The server never sees a login's details in the clear.
+ */
+export async function saveBankLogins(changes: LoginChange[]): Promise<SyncState> {
+  const ctx = await requireContext();
+  if (!Array.isArray(changes) || changes.length === 0 || changes.length > 40) throw new Error("nothing to save");
+  // Old-format details cannot be merged into, so the first save in the new format replaces them.
+  const { logins } = await readSaved(ctx);
+  await writeSaved(ctx, mergeLogins(logins, changes, COMPANIES, new Date().toISOString()));
   return getSyncState();
 }
 
-export async function clearBankCredentials(): Promise<SyncState> {
+/** Removes one saved login, or, with no id, everything saved (including old-format details). */
+export async function removeBankLogin(id?: string): Promise<SyncState> {
   const ctx = await requireContext();
-  const { error } = await ctx.supabase
-    .from("bank_sync_settings")
-    .update({ credentials: null, credentials_updated_at: null })
-    .eq("household_id", ctx.household.id);
-  if (error) throw new Error(error.message);
+  const { logins } = await readSaved(ctx);
+  await writeSaved(ctx, id === undefined ? [] : logins.filter((login) => login.id !== id));
   return getSyncState();
 }
 
