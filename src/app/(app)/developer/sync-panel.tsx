@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ChevronDown } from "@/components/icons";
 import { Card, SectionTitle } from "@/components/ui";
 import { BANKS, CARDS, type BankSource } from "@/lib/bank-sources";
 import { fingerprint, seal } from "../../../../sync/seal.mjs";
@@ -78,6 +79,44 @@ function SourceFields({ source }: { source: BankSource }) {
         </label>
       ))}
     </div>
+  );
+}
+
+/** A section of the screen that opens and closes, like a category on the budget screen. */
+function Fold({
+  title,
+  aside,
+  open,
+  children,
+}: {
+  title: string;
+  /** Shown in the header, so the state is visible while the section is closed. */
+  aside?: ReactNode;
+  open?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details className="panel" open={open}>
+      <summary className="flex cursor-pointer items-center gap-3 p-4">
+        <span className="flex-1 text-lg font-bold">{title}</span>
+        {aside}
+        <ChevronDown className="chevron shrink-0 text-muted" />
+      </summary>
+      <div className="space-y-3 px-4 pb-4">{children}</div>
+    </details>
+  );
+}
+
+/** One login inside the details form. Closed fields are still sent with the form. */
+function SourceFold({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <details className="rounded-2xl border border-line">
+      <summary className="flex cursor-pointer items-center gap-3 p-3 font-semibold">
+        <span className="flex-1">{title}</span>
+        <ChevronDown className="chevron shrink-0 text-muted" />
+      </summary>
+      <div className="space-y-3 px-3 pb-3">{children}</div>
+    </details>
   );
 }
 
@@ -227,16 +266,17 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
 
   return (
     <>
-      <Card className="space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <SectionTitle>המחשב בבית</SectionTitle>
+      <Fold
+        title="המחשב בבית"
+        aside={
           <span
             className={`flex items-center gap-2 text-sm font-semibold ${state.agentOnline ? "text-good" : "text-muted"}`}
           >
             <span className={`size-2.5 rounded-full ${state.agentOnline ? "bg-good" : "bg-line"}`} aria-hidden="true" />
             {state.agentOnline ? "מחובר" : "לא מחובר"}
           </span>
-        </div>
+        }
+      >
         {state.agentOnline ? (
           <p className="text-sm text-muted">הסנכרון עצמו רץ על המחשב בבית. מכאן רק מבקשים אותו ורואים מה קרה.</p>
         ) : (
@@ -248,42 +288,44 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
             <code className="num">npm run agent</code> ומשאירים את החלון פתוח.
           </p>
         )}
-      </Card>
+      </Fold>
 
-      <Card className="space-y-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <SectionTitle>פרטי כניסה לבנק</SectionTitle>
+      <Fold
+        title="פרטי כניסה"
+        aside={
           <span className="text-sm text-muted">
             {state.credentialsSavedAt
               ? `נשמרו ב־${timeFormat.format(new Date(state.credentialsSavedAt))}`
               : "לא נשמרו"}
           </span>
-        </div>
+        }
+      >
         <p className="text-sm text-muted">
           הפרטים מוצפנים כאן בדפדפן, לפני השליחה, עם מפתח שרק המחשב בבית יכול לפתוח. במסד נשמר רק הטקסט
           המוצפן, ולכן אי אפשר להציג אותם שוב. שמירה מחליפה את כל מה שנשמר קודם, אז כדי לשנות או
           להוסיף כרטיס ממלאים מחדש את כל הפרטים. כרטיס שאין לכם משאירים ריק.
         </p>
         {state.publicKey ? (
-          <form onSubmit={onSave} className="space-y-4">
-            <label className="block space-y-1">
-              <span className="text-sm font-semibold">בנק</span>
-              <select className="field" value={bank} onChange={(event) => setBank(event.target.value)}>
-                {BANKS.map((b) => (
-                  <option key={b.company} value={b.company}>
-                    {b.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {BANKS.filter((b) => b.company === bank).map((source) => (
-              <SourceFields key={source.company} source={source} />
-            ))}
+          <form onSubmit={onSave} className="space-y-3">
+            <SourceFold title="חשבון הבנק">
+              <label className="block space-y-1">
+                <span className="text-sm font-semibold">בנק</span>
+                <select className="field" value={bank} onChange={(event) => setBank(event.target.value)}>
+                  {BANKS.map((b) => (
+                    <option key={b.company} value={b.company}>
+                      {b.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {BANKS.filter((b) => b.company === bank).map((source) => (
+                <SourceFields key={source.company} source={source} />
+              ))}
+            </SourceFold>
             {CARDS.map((source) => (
-              <fieldset key={source.company} className="space-y-2">
-                <legend className="text-sm font-bold">כרטיס אשראי: {source.label}</legend>
+              <SourceFold key={source.company} title={`כרטיס אשראי: ${source.label}`}>
                 <SourceFields source={source} />
-              </fieldset>
+              </SourceFold>
             ))}
             <div className={`space-y-2 rounded-2xl p-3 text-sm ${keyChanged ? "bg-danger-soft" : "bg-accent-soft"}`}>
               <p>
@@ -327,12 +369,13 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
             אפשר למלא פרטים רק אחרי שהמחשב בבית התחבר פעם אחת, כי ההצפנה נעשית עם המפתח שלו.
           </p>
         )}
-      </Card>
+      </Fold>
 
-      <Card className="space-y-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <SectionTitle>סנכרון</SectionTitle>
-          {latest && (
+      <Fold
+        title="סנכרון"
+        open
+        aside={
+          latest && (
             <span
               className={`text-sm font-semibold ${
                 latest.status === "failed" ? "text-danger" : latest.status === "done" ? "text-good" : "text-accent"
@@ -340,8 +383,9 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
             >
               {STATUS_LABEL[latest.status]}
             </span>
-          )}
-        </div>
+          )
+        }
+      >
         <label className="block space-y-1">
           <span className="text-sm font-semibold">כמה אחורה לקרוא</span>
           <select
@@ -402,10 +446,9 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
             ))}
           </ul>
         )}
-      </Card>
+      </Fold>
 
-      <Card className="space-y-3">
-        <SectionTitle>איפוס נתונים</SectionTitle>
+      <Fold title="איפוס נתונים">
         <p className="text-sm text-muted">
           מוחק את כל ההוצאות וההכנסות (<span className="num">{state.stored.transactions}</span> שורות) ואת
           היסטוריית הבוט (<span className="num">{state.stored.chatMessages}</span> הודעות), כדי להתחיל מחדש
@@ -428,7 +471,7 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
         >
           מחיקת כל ההוצאות, ההכנסות והצ׳אט
         </button>
-      </Card>
+      </Fold>
 
       {notice && (
         <p role="status" className="rounded-3xl bg-good-soft p-4 text-sm">

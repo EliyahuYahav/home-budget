@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 
-const TAPS_TO_UNLOCK = 7;
+const TAPS = 7;
 const STORAGE_KEY = "developer-options";
 
 function subscribe(onChange: () => void) {
@@ -20,28 +20,39 @@ function isUnlocked() {
   }
 }
 
+function setUnlocked(unlocked: boolean) {
+  try {
+    if (unlocked) localStorage.setItem(STORAGE_KEY, "1");
+    else localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Without storage the screen still opens; it just needs the taps again next time.
+  }
+  // The storage event only reaches other tabs; this one is told directly.
+  window.dispatchEvent(new Event("storage"));
+}
+
 /**
  * The app version. Tapping it seven times opens the developer options and leaves a link to
- * them on this device, the way a phone's build number does.
+ * them on this device, the way a phone's build number does. Seven more taps hide the link again.
  */
 export function VersionRow({ version }: { version: string }) {
   const router = useRouter();
   const [taps, setTaps] = useState(0);
   const unlocked = useSyncExternalStore(subscribe, isUnlocked, () => false);
-  const left = TAPS_TO_UNLOCK - taps;
+  const left = TAPS - taps;
 
   function onTap() {
-    if (unlocked) return;
     if (left > 1) {
       setTaps(taps + 1);
       return;
     }
-    try {
-      localStorage.setItem(STORAGE_KEY, "1");
-    } catch {
-      // Without storage the screen still opens; it just needs the taps again next time.
+    setTaps(0);
+    if (unlocked) {
+      setUnlocked(false);
+    } else {
+      setUnlocked(true);
+      router.push("/developer");
     }
-    router.push("/developer");
   }
 
   return (
@@ -49,14 +60,15 @@ export function VersionRow({ version }: { version: string }) {
       <button type="button" onClick={onTap} className="num px-3 py-1">
         גרסה {version}
       </button>
-      <p aria-live="polite">
-        {unlocked ? (
+      {unlocked && (
+        <p>
           <Link href="/developer" className="font-semibold text-accent">
             אפשרויות מפתחים
           </Link>
-        ) : (
-          taps >= 3 && `עוד ${left} לחיצות לאפשרויות מפתחים`
-        )}
+        </p>
+      )}
+      <p aria-live="polite">
+        {taps >= 3 && `עוד ${left} לחיצות ${unlocked ? "להסתרת" : "לפתיחת"} אפשרויות המפתחים`}
       </p>
     </div>
   );
