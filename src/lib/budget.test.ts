@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatILS, settleCash, summarizeMonth } from "./budget";
+import { dailySpending, formatILS, fundStatus, settleCash, summarizeMonth } from "./budget";
 import type { Category, Transaction } from "./types";
 
 const category = (id: string, over: Partial<Category> = {}): Category => ({
@@ -223,5 +223,96 @@ describe("settleCash", () => {
     const income = tx(500, null, { type: "income" });
     const { transactions } = settleCash([withdrawal, income], withCash);
     expect(transactions.map((t) => t.amount)).toEqual([300, 500]);
+  });
+});
+
+describe("funds for yearly expenses", () => {
+  const insurance = category("insurance", {
+    kind: "fund",
+    monthly_budget: 250,
+    fund_start: "2026-06-01",
+    fund_opening: 500,
+  });
+  const charged = (entries: Record<string, number>) => new Map(Object.entries(entries));
+
+  it("gathers the monthly amount from the month the fund began", () => {
+    // June to October is five months: 500 + 5 x 250.
+    expect(fundStatus(insurance, "2026-10", charged({}))).toEqual({
+      before: 1500,
+      contribution: 250,
+      paid: 0,
+      shortfall: 0,
+      balance: 1750,
+    });
+    expect(fundStatus(insurance, "2026-06", charged({})).balance).toBe(750);
+  });
+
+  it("pays a charge from what has gathered", () => {
+    const fund = fundStatus(insurance, "2026-10", charged({ "2026-10": 1600 }));
+    expect(fund).toMatchObject({ paid: 1600, shortfall: 0, balance: 150 });
+    // A charge in an earlier month is already out of the fund.
+    expect(fundStatus(insurance, "2026-10", charged({ "2026-08": 1000 })).balance).toBe(750);
+  });
+
+  it("leaves to the month what the fund cannot pay, and starts again from nothing", () => {
+    const fund = fundStatus(insurance, "2026-10", charged({ "2026-10": 3000 }));
+    expect(fund).toMatchObject({ paid: 1750, shortfall: 1250, balance: 0 });
+    // The month after an emptied fund holds one contribution, not a debt.
+    expect(fundStatus(insurance, "2026-11", charged({ "2026-10": 3000 })).balance).toBe(250);
+  });
+
+  it("is an ordinary expense before the fund began", () => {
+    expect(fundStatus(insurance, "2026-05", charged({ "2026-05": 400 }))).toEqual({
+      before: 0,
+      contribution: 0,
+      paid: 0,
+      shortfall: 400,
+      balance: 0,
+    });
+  });
+
+  it("sets the contribution aside and keeps a paid charge out of the month", () => {
+    const input = {
+      month: "2026-10",
+      today: "2026-10-11",
+      categories: [...categories, insurance],
+      recurringIncomes: [{ id: "i1", name: "salary", amount: 12000 }],
+      fundHistory: [{ category_id: "insurance", amount: 1000, occurred_on: "2026-08-20" }],
+    };
+    const quiet = summarizeMonth({ ...input, transactions: [tx(900, "groceries")] });
+    expect(quiet.fundsReserved).toBe(250);
+    expect(quiet.fundsBalance).toBe(750);
+    expect(quiet.remaining).toBe(12000 - 2000 - 250 - 900);
+
+    // 700 of the fund's 750 pays the bill: the month is exactly where it was.
+    const paid = summarizeMonth({ ...input, transactions: [tx(900, "groceries"), tx(700, "insurance")] });
+    expect(paid.spent).toBe(900);
+    expect(paid.remaining).toBe(quiet.remaining);
+    expect(paid.fundsBalance).toBe(50);
+    const row = paid.categories.find((c) => c.category.id === "insurance")!;
+    expect(row).toMatchObject({ spent: 700, ratio: null, status: "ok" });
+
+    // 1,000 is 250 more than the fund holds; only that comes off the month.
+    const short = summarizeMonth({ ...input, transactions: [tx(900, "groceries"), tx(1000, "insurance")] });
+    expect(short.spent).toBe(1150);
+    expect(short.categories.find((c) => c.category.id === "insurance")!.status).toBe("over");
+  });
+
+  it("keeps a fund's charge out of the day-to-day spending", () => {
+    const days = dailySpending("2026-10", [tx(900, "groceries"), tx(700, "insurance")], [...categories, insurance]);
+    expect(days[4]).toBe(900);
+  });
+
+  it("counts a hidden fund's charges as ordinary spending", () => {
+    const hidden = { ...insurance, archived: true };
+    const summary = summarizeMonth({
+      month: "2026-10",
+      today: "2026-10-11",
+      categories: [...categories, hidden],
+      recurringIncomes: [{ id: "i1", name: "salary", amount: 12000 }],
+      transactions: [tx(700, "insurance")],
+    });
+    expect(summary.fundsReserved).toBe(0);
+    expect(summary.spent).toBe(700);
   });
 });

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { settleCash } from "./budget";
+import { settleCash, type FundCharge } from "./budget";
 import { monthRange } from "./dates";
 import { createClient } from "./supabase/server";
 import type { Category, ChatMessage, Member, RecurringIncome, Transaction } from "./types";
@@ -42,11 +42,40 @@ const num = (value: unknown) => Number(value ?? 0);
 export async function getCategories(ctx: AppContext): Promise<Category[]> {
   const { data, error } = await ctx.supabase
     .from("categories")
-    .select("id, name, kind, is_fixed, monthly_budget, sort_order, archived")
+    // Every column, so a database that has not been given the newest ones yet still answers.
+    .select("*")
     .eq("household_id", ctx.household.id)
     .order("sort_order");
   if (error) throw new Error(error.message);
-  return (data ?? []).map((c) => ({ ...c, monthly_budget: num(c.monthly_budget) })) as Category[];
+  return (data ?? []).map((c) => ({
+    ...c,
+    monthly_budget: num(c.monthly_budget),
+    fund_start: c.fund_start ?? null,
+    fund_opening: num(c.fund_opening),
+  })) as Category[];
+}
+
+/**
+ * What was charged to the funds before `month`, back to the month the oldest of them began:
+ * what summarizeMonth needs to know how much each fund holds.
+ */
+export async function getFundHistory(ctx: AppContext, categories: Category[], month: string): Promise<FundCharge[]> {
+  const funds = categories.filter((c) => c.kind === "fund" && !c.archived && c.fund_start);
+  const { start } = monthRange(month);
+  const earliest = funds.map((c) => c.fund_start as string).sort()[0];
+  if (!earliest || earliest >= start) return [];
+
+  const { data, error } = await ctx.supabase
+    .from("transactions")
+    .select("category_id, amount, occurred_on")
+    .eq("household_id", ctx.household.id)
+    .eq("type", "expense")
+    .in("category_id", funds.map((c) => c.id))
+    .gte("occurred_on", earliest)
+    .lt("occurred_on", start)
+    .limit(1000);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((t) => ({ ...t, amount: num(t.amount) })) as FundCharge[];
 }
 
 export async function getTransactions(ctx: AppContext, month: string): Promise<Transaction[]> {
@@ -150,6 +179,12 @@ export async function getMonthData(ctx: AppContext, month: string) {
     getTransactions(ctx, month),
     getRecurringIncomes(ctx),
   ]);
+  const fundHistory = await getFundHistory(ctx, categories, month);
   // For every total and summary: cash purchases come off the cash withdrawals.
-  return { categories, transactions: settleCash(transactions, categories).transactions, recurringIncomes };
+  return {
+    categories,
+    transactions: settleCash(transactions, categories).transactions,
+    recurringIncomes,
+    fundHistory,
+  };
 }

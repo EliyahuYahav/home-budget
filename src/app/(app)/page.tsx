@@ -18,6 +18,9 @@ export default async function HomePage() {
     .filter((c) => c.status !== "ok")
     .sort((a, b) => (b.ratio ?? Infinity) - (a.ratio ?? Infinity));
   const overBudget = summary.flexibleRemaining < 0;
+  const funds = summary.categories.filter((c) => c.fund);
+  // What comes off the income before the day-to-day money, in words.
+  const setAside = funds.length > 0 ? "חיסכון, קרנות וחשבונות קבועים" : "חיסכון וחשבונות קבועים";
 
   const days = dailySpending(month, data.transactions, data.categories);
   const flexibleSpent = days.reduce((sum, d) => sum + d, 0);
@@ -54,13 +57,12 @@ export default async function HomePage() {
           <p className="mt-2 text-hero-ink/80">
             {overBudget ? (
               <>
-                חרגתם ב־<Money amount={-summary.flexibleRemaining} /> ממה שפנוי החודש, אחרי חיסכון
-                וחשבונות קבועים.
+                חרגתם ב־<Money amount={-summary.flexibleRemaining} /> ממה שפנוי החודש, אחרי {setAside}.
               </>
             ) : (
               <>
                 נשארו <Money amount={summary.flexibleRemaining} className="font-bold" /> פנויים ל־
-                {summary.daysLeft} ימים, אחרי חיסכון וחשבונות קבועים.
+                {summary.daysLeft} ימים, אחרי {setAside}.
               </>
             )}
           </p>
@@ -120,6 +122,34 @@ export default async function HomePage() {
           מופרש מההכנסה בתחילת החודש, לפני שמחשבים כמה מותר להוציא.
         </p>
       </Card>
+
+      {funds.length > 0 && (
+        <Card className="space-y-2">
+          <div className="flex items-baseline justify-between">
+            <SectionTitle>קרנות להוצאות שנתיות</SectionTitle>
+            <p>
+              <span className="text-sm text-muted">בקרנות</span>{" "}
+              <Money amount={summary.fundsBalance} className="font-bold" />
+            </p>
+          </div>
+          <ul className="divide-y divide-line">
+            {funds.map(({ category, fund }) => (
+              <li key={category.id} className="flex items-baseline justify-between gap-2 py-1.5">
+                <span>{category.name}</span>
+                <span>
+                  <Money amount={fund!.balance} className="font-bold" />{" "}
+                  <span className="text-sm text-muted">
+                    (<Money amount={fund!.contribution} /> בחודש)
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-muted">
+            מופרשים כל חודש לחיובים שמגיעים פעם בשנה, כדי שלא יפילו את החודש שבו הם מגיעים.
+          </p>
+        </Card>
+      )}
 
       {flagged.length > 0 && (
         <Card className="space-y-3">

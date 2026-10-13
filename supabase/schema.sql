@@ -28,17 +28,31 @@ create table if not exists public.household_members (
 -- at the start of the month, before anything is available to spend.
 -- is_fixed marks bills (rent, internet...) whose unpaid part is reserved when
 -- computing how much is safe to spend today.
+-- kind = 'fund' is money put aside every month for a bill that comes once a year (car
+-- insurance, holidays): monthly_budget goes into the fund each month from fund_start on,
+-- and a charge filed under it is paid from what has gathered instead of from the month.
 create table if not exists public.categories (
   id             uuid primary key default gen_random_uuid(),
   household_id   uuid not null references public.households (id) on delete cascade,
   name           text not null,
-  kind           text not null default 'expense' check (kind in ('expense', 'saving')),
+  kind           text not null default 'expense' check (kind in ('expense', 'saving', 'fund')),
   is_fixed       boolean not null default false,
   monthly_budget numeric(12, 2) not null default 0 check (monthly_budget >= 0),
   sort_order     int not null default 0,
   archived       boolean not null default false,
+  -- For a fund: the first day of the month it began, and what was already in it then.
+  fund_start     date,
+  fund_opening   numeric(12, 2) not null default 0 check (fund_opening >= 0),
   unique (household_id, name)
 );
+
+-- For databases created before funds existed.
+alter table public.categories add column if not exists fund_start date;
+alter table public.categories
+  add column if not exists fund_opening numeric(12, 2) not null default 0 check (fund_opening >= 0);
+alter table public.categories drop constraint if exists categories_kind_check;
+alter table public.categories
+  add constraint categories_kind_check check (kind in ('expense', 'saving', 'fund'));
 
 -- Fixed monthly incomes (salaries). One-off incomes are transactions of type 'income'.
 create table if not exists public.recurring_incomes (

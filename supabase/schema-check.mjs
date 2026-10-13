@@ -168,6 +168,14 @@ expect("other household cannot remove B's payers", blocked(r), show(r));
 r = await as("B", "insert into public.next_month_incomes (household_id, payer) values ($1, ' ')", [hidB]);
 expect("an empty payer is refused", !r.ok, show(r));
 
+// --- funds for yearly expenses
+r = await as("B", "insert into public.categories (household_id, name, kind, monthly_budget, fund_start, fund_opening) values ($1, 'ביטוח רכב', 'fund', 250, '2026-10-01', 500)", [hidB]);
+expect("a household can open a fund", r.ok, show(r));
+r = await as("B", "insert into public.categories (household_id, name, kind) values ($1, 'other kind', 'loan')", [hidB]);
+expect("an unknown kind of category is refused", !r.ok, show(r));
+r = await as("B", "update public.categories set fund_opening = -1 where household_id = $1 and name = 'ביטוח רכב'", [hidB]);
+expect("a fund cannot open below zero", !r.ok, show(r));
+
 // --- reset: a household can clear its own rows, and only its own
 r = await as("A", "delete from public.transactions where household_id = $1", [hidA]);
 expect("a household can delete all of its own transactions", r.ok && r.affected === 3, show(r));

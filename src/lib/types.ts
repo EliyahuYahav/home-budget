@@ -1,4 +1,4 @@
-export type CategoryKind = "expense" | "saving";
+export type CategoryKind = "expense" | "saving" | "fund";
 export type TransactionType = "expense" | "income";
 
 export interface Category {
@@ -9,6 +9,10 @@ export interface Category {
   monthly_budget: number;
   sort_order: number;
   archived: boolean;
+  /** For a fund: the first day of the month it began (YYYY-MM-DD). */
+  fund_start?: string | null;
+  /** For a fund: what was already in it when it began. */
+  fund_opening?: number;
 }
 
 export interface Transaction {

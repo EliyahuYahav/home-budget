@@ -11,7 +11,7 @@ import { isValidDate, monthOf, shortDate, todayISO } from "@/lib/dates";
 import { isSecretBoxConfigured, sealSecret } from "@/lib/secret-box";
 import { createClient } from "@/lib/supabase/server";
 import { payeeKey } from "../../sync/payee.mjs";
-import type { ChatMessage, ParsedEntry } from "@/lib/types";
+import type { CategoryKind, ChatMessage, ParsedEntry } from "@/lib/types";
 
 export interface FormState {
   error?: string;
@@ -204,20 +204,51 @@ export async function deleteTransaction(form: FormData) {
 // Budget categories and fixed incomes
 // --------------------------------------------------------------------------
 
+function categoryKind(form: FormData): CategoryKind {
+  const kind = text(form, "kind");
+  return kind === "saving" || kind === "fund" ? kind : "expense";
+}
+
+/** A fund begins in the month it is opened. */
+const fundStartNow = () => `${monthOf(todayISO())}-01`;
+
 export async function saveCategory(form: FormData) {
   const ctx = await requireContext();
   const budget = Number(text(form, "monthlyBudget").replace(/,/g, ""));
   const name = text(form, "name");
   if (!name || !Number.isFinite(budget) || budget < 0) return;
+  const kind = categoryKind(form);
+
+  const { data: current, error: readError } = await ctx.supabase
+    .from("categories")
+    .select("*")
+    .eq("id", text(form, "id"))
+    .eq("household_id", ctx.household.id)
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+  if (!current) return;
+
+  // The fund columns are written only for a fund, so the other kinds still save on a
+  // database that has not been given those columns yet.
+  let fund: { fund_start?: string | null; fund_opening?: number } = {};
+  if (kind === "fund") {
+    const opening = Number(text(form, "fundOpening").replace(/,/g, "") || "0");
+    if (!Number.isFinite(opening) || opening < 0) return;
+    fund = { fund_opening: opening };
+    if (current.kind !== "fund" || !current.fund_start) fund.fund_start = fundStartNow();
+  } else if (current.kind === "fund") {
+    fund = { fund_start: null, fund_opening: 0 };
+  }
 
   const { error } = await ctx.supabase
     .from("categories")
     .update({
       name,
       monthly_budget: budget,
-      kind: text(form, "kind") === "saving" ? "saving" : "expense",
-      is_fixed: form.get("isFixed") === "on",
+      kind,
+      is_fixed: kind === "expense" && form.get("isFixed") === "on",
       archived: form.get("archived") === "on",
+      ...fund,
     })
     .eq("id", text(form, "id"))
     .eq("household_id", ctx.household.id);
@@ -241,14 +272,16 @@ export async function addCategory(form: FormData) {
   const budget = Number(text(form, "monthlyBudget").replace(/,/g, "") || "0");
   const name = text(form, "name");
   if (!name || !Number.isFinite(budget) || budget < 0) return;
+  const kind = categoryKind(form);
 
   const { error } = await ctx.supabase.from("categories").insert({
     household_id: ctx.household.id,
     name,
     monthly_budget: budget,
-    kind: text(form, "kind") === "saving" ? "saving" : "expense",
-    is_fixed: form.get("isFixed") === "on",
+    kind,
+    is_fixed: kind === "expense" && form.get("isFixed") === "on",
     sort_order: 1000,
+    ...(kind === "fund" ? { fund_start: fundStartNow() } : {}),
   });
   if (error) throw new Error(error.message);
   revalidateApp();
@@ -372,15 +405,24 @@ export async function sendChatMessage(
   const monthContext = [
     `Income: ${summaryBefore.income}${summaryBefore.incomeIsEstimated ? " (estimated from the planned budget; no income was entered)" : ""}`,
     `Savings target: ${summaryBefore.savingsTarget}, saved so far: ${summaryBefore.saved}`,
+    `Put into funds for yearly expenses this month: ${summaryBefore.fundsReserved}`,
     `Spent so far: ${summaryBefore.spent}`,
-    `Remaining after savings: ${summaryBefore.remaining}`,
+    `Remaining after savings and funds: ${summaryBefore.remaining}`,
     `Free for day-to-day spending after unpaid fixed bills: ${summaryBefore.flexibleRemaining}`,
     `Days left in the month including today: ${summaryBefore.daysLeft}`,
     `Safe to spend today: ${summaryBefore.safeToSpendToday}`,
     "Per category (spent / monthly budget):",
-    ...summaryBefore.categories.map(
-      (c) => `- ${c.category.name}: ${c.spent} / ${c.category.monthly_budget}`,
-    ),
+    ...summaryBefore.categories
+      .filter((c) => !c.fund)
+      .map((c) => `- ${c.category.name}: ${c.spent} / ${c.category.monthly_budget}`),
+    ...(summaryBefore.categories.some((c) => c.fund)
+      ? [
+          "Funds for yearly expenses (in the fund now; put in every month; charged this month). A charge filed under a fund is paid from the fund and does not reduce what is free this month:",
+          ...summaryBefore.categories
+            .filter((c) => c.fund)
+            .map((c) => `- ${c.category.name}: ${c.fund!.balance}; ${c.fund!.contribution}; ${c.spent}`),
+        ]
+      : []),
   ].join("\n");
 
   const claudeKey = await resolveClaudeKey(ctx);
@@ -423,7 +465,16 @@ export async function sendChatMessage(
 
     const touched = new Set(interpretation.entries.map((e) => e.category).filter(Boolean));
     for (const status of summary.categories) {
-      if (!touched.has(status.category.name) || status.category.monthly_budget === 0) continue;
+      if (!touched.has(status.category.name)) continue;
+      if (status.fund) {
+        lines.push(
+          status.fund.shortfall > 0
+            ? `${status.category.name}: הקרן התרוקנה, ו־${formatILS(status.fund.shortfall)} ירדו מהחודש`
+            : `${status.category.name}: שולם מהקרן, נשארו בה ${formatILS(status.fund.balance)}`,
+        );
+        continue;
+      }
+      if (status.category.monthly_budget === 0) continue;
       const percent = Math.round((status.ratio ?? 0) * 100);
       const flag = status.status === "over" ? " — חריגה מהתקציב" : status.status === "warning" ? " — מתקרבים לתקרה" : "";
       lines.push(

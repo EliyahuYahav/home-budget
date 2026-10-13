@@ -1,4 +1,4 @@
-import { daysInMonth, daysLeftInMonth } from "./dates";
+import { daysInMonth, daysLeftInMonth, monthOf, shiftMonth } from "./dates";
 import type { Category, RecurringIncome, Transaction } from "./types";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -9,6 +9,64 @@ export interface CategoryStatus {
   /** spent / budget; null when the category has no budget. */
   ratio: number | null;
   status: "ok" | "warning" | "over";
+  /** Set for a fund: `spent` is then what was charged to it this month. */
+  fund?: FundStatus;
+}
+
+/** A fund for a yearly expense, in one month. */
+export interface FundStatus {
+  /** In the fund when the month began. */
+  before: number;
+  /** Put in this month. Nothing before the month the fund began. */
+  contribution: number;
+  /** This month's charges that the fund paid. */
+  paid: number;
+  /** This month's charges beyond what the fund held; they count as the month's spending. */
+  shortfall: number;
+  /** In the fund after this month's contribution and charges. */
+  balance: number;
+}
+
+/** An expense filed under a fund: all the fund arithmetic needs of a transaction. */
+export type FundCharge = Pick<Transaction, "category_id" | "amount" | "occurred_on">;
+
+const isFund = (category: Category) => category.kind === "fund" && !category.archived;
+
+/**
+ * Where a fund stands in `month`. Each month from its first, the monthly amount goes in and
+ * that month's charges come out. A charge the fund cannot pay in full empties it, and the
+ * rest is that month's `shortfall`; the fund does not go below zero and owe it back.
+ *
+ * The monthly amount is today's for every month: a fund whose amount was changed is
+ * recounted as if it had always been the new one.
+ *
+ * @param chargedByMonth What was charged to this fund in each month ("YYYY-MM").
+ */
+export function fundStatus(category: Category, month: string, chargedByMonth: Map<string, number>): FundStatus {
+  const charged = chargedByMonth.get(month) ?? 0;
+  const start = category.fund_start ? monthOf(category.fund_start) : null;
+  if (!isFund(category) || !start || month < start) {
+    return { before: 0, contribution: 0, paid: 0, shortfall: round2(charged), balance: 0 };
+  }
+
+  let before = 0;
+  let balance = category.fund_opening ?? 0;
+  let shortfall = 0;
+  // Far more months than a fund will live; only a guard against a malformed date.
+  for (let m = start, i = 0; m <= month && i < 1200; m = shiftMonth(m, 1), i += 1) {
+    before = balance;
+    const available = before + category.monthly_budget;
+    const out = chargedByMonth.get(m) ?? 0;
+    shortfall = Math.max(out - available, 0);
+    balance = Math.max(available - out, 0);
+  }
+  return {
+    before: round2(before),
+    contribution: category.monthly_budget,
+    paid: round2(charged - shortfall),
+    shortfall: round2(shortfall),
+    balance: round2(balance),
+  };
 }
 
 export interface MonthSummary {
@@ -21,9 +79,14 @@ export interface MonthSummary {
   saved: number;
   /** Set aside for savings before anything is spendable: the larger of target and actual. */
   savingsReserved: number;
+  /** Put into the funds for yearly expenses this month, before anything is spendable. */
+  fundsReserved: number;
+  /** In all the funds together, after this month. */
+  fundsBalance: number;
+  /** Everything that left the month: charges a fund paid are not in it, a fund's shortfall is. */
   spent: number;
   uncategorizedSpent: number;
-  /** income - savingsReserved - spent */
+  /** income - savingsReserved - fundsReserved - spent */
   remaining: number;
   /** Unpaid part of fixed bills (rent, internet...) still expected this month. */
   fixedReserve: number;
@@ -91,6 +154,8 @@ export function summarizeMonth(input: {
   categories: Category[];
   transactions: Transaction[];
   recurringIncomes: RecurringIncome[];
+  /** Expenses filed under the funds in the months before this one. */
+  fundHistory?: FundCharge[];
 }): MonthSummary {
   const { month, today, transactions, recurringIncomes } = input;
   const categories = input.categories.filter((c) => !c.archived);
@@ -115,7 +180,30 @@ export function summarizeMonth(input: {
     }
     spentByCategory.set(category.id, (spentByCategory.get(category.id) ?? 0) + t.amount);
     if (category.kind === "saving") saved += t.amount;
-    else spent += t.amount;
+    // A fund pays its own charges; only what it could not cover is added below.
+    else if (!isFund(category)) spent += t.amount;
+  }
+
+  const chargedByFund = new Map<string, Map<string, number>>();
+  for (const charge of input.fundHistory ?? []) {
+    if (!charge.category_id) continue;
+    const byMonth = chargedByFund.get(charge.category_id) ?? new Map<string, number>();
+    const chargeMonth = monthOf(charge.occurred_on);
+    byMonth.set(chargeMonth, (byMonth.get(chargeMonth) ?? 0) + charge.amount);
+    chargedByFund.set(charge.category_id, byMonth);
+  }
+  const funds = new Map<string, FundStatus>();
+  let fundsReserved = 0;
+  let fundsBalance = 0;
+  for (const category of categories.filter(isFund)) {
+    // This month's charges come from the month's own rows, where cash is already settled.
+    const byMonth = new Map(chargedByFund.get(category.id));
+    byMonth.set(month, spentByCategory.get(category.id) ?? 0);
+    const fund = fundStatus(category, month, byMonth);
+    funds.set(category.id, fund);
+    fundsReserved += fund.contribution;
+    fundsBalance += fund.balance;
+    spent += fund.shortfall;
   }
 
   const fixedIncome = recurringIncomes.reduce((sum, i) => sum + i.amount, 0);
@@ -132,7 +220,7 @@ export function summarizeMonth(input: {
     .filter((c) => c.kind === "expense" && c.is_fixed)
     .reduce((sum, c) => sum + Math.max(c.monthly_budget - (spentByCategory.get(c.id) ?? 0), 0), 0);
 
-  const remaining = income - savingsReserved - spent;
+  const remaining = income - savingsReserved - fundsReserved - spent;
   const flexibleRemaining = remaining - fixedReserve;
   const daysLeft = daysLeftInMonth(month, today);
   const safeToSpendToday = daysLeft > 0 ? Math.max(flexibleRemaining, 0) / daysLeft : 0;
@@ -141,12 +229,15 @@ export function summarizeMonth(input: {
     const categorySpent = spentByCategory.get(category.id) ?? 0;
     const ratio = category.monthly_budget > 0 ? categorySpent / category.monthly_budget : null;
     let status: CategoryStatus["status"] = "ok";
+    const fund = funds.get(category.id);
     // Reaching a savings target is the goal, so savings lines are never flagged.
     if (category.kind === "expense") {
       if (ratio === null ? categorySpent > 0 : ratio > 1) status = "over";
       else if (ratio !== null && ratio >= WARNING_RATIO) status = "warning";
+    } else if (fund && fund.shortfall > 0) {
+      status = "over";
     }
-    return { category, spent: round2(categorySpent), ratio, status };
+    return { category, spent: round2(categorySpent), ratio: fund ? null : ratio, status, ...(fund ? { fund } : {}) };
   });
 
   return {
@@ -157,6 +248,8 @@ export function summarizeMonth(input: {
     savingsTarget: round2(savingsTarget),
     saved: round2(saved),
     savingsReserved: round2(savingsReserved),
+    fundsReserved: round2(fundsReserved),
+    fundsBalance: round2(fundsBalance),
     spent: round2(spent),
     uncategorizedSpent: round2(uncategorizedSpent),
     remaining: round2(remaining),
@@ -170,7 +263,7 @@ export function summarizeMonth(input: {
 
 /**
  * Day-to-day spending for each day of the month (index 0 is the 1st): expenses
- * outside savings and fixed bills, which is what the daily allowance covers.
+ * outside savings, funds and fixed bills, which is what the daily allowance covers.
  */
 export function dailySpending(
   month: string,
@@ -182,7 +275,7 @@ export function dailySpending(
   for (const t of transactions) {
     if (t.type !== "expense" || !t.occurred_on.startsWith(month)) continue;
     const category = t.category_id ? byId.get(t.category_id) : undefined;
-    if (category && (category.kind === "saving" || category.is_fixed)) continue;
+    if (category && (category.kind === "saving" || isFund(category) || category.is_fixed)) continue;
     days[Number(t.occurred_on.slice(8, 10)) - 1] += t.amount;
   }
   return days.map(round2);

@@ -252,7 +252,7 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     .select("id, name")
     .eq("household_id", householdId)
     .eq("archived", false)
-    .eq("kind", "expense")
+    .in("kind", ["expense", "fund"])
     .order("sort_order");
   if (categoriesError) throw new Error(categoriesError.message);
   // Per account, what was read and what became of it: the first place to look when an
