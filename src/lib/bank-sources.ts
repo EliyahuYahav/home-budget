@@ -46,3 +46,16 @@ export const CARDS: BankSource[] = [
   source("beyahadBishvilha", "ביחד בשבילך", ["id", "password"]),
   source("behatsdaa", "בהצדעה", ["id", "password"]),
 ];
+
+/**
+ * The account a synced row came from, read off the id the sync gave it
+ * ("discount:0123456789:42" is Discount, account ending 6789). null for rows written by hand.
+ */
+export function accountOf(externalId: string | null | undefined): { key: string; label: string } | null {
+  if (!externalId) return null;
+  const [company, account] = externalId.split(":");
+  if (!company || !account) return null;
+  const name = [...BANKS, ...CARDS].find((source) => source.company === company)?.label ?? company;
+  return { key: `${company}:${account}`, label: `${name} ${account.slice(-4)}` };
+}
+

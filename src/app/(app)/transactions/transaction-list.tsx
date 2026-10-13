@@ -5,6 +5,7 @@ import { addTransaction, deleteTransaction, updateTransaction } from "@/app/acti
 import { ChevronDown, PlusIcon } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { EmptyNote } from "@/components/ui";
+import { accountOf } from "@/lib/bank-sources";
 import { formatILS } from "@/lib/budget";
 import { dayLabel } from "@/lib/dates";
 import type { Category, Transaction } from "@/lib/types";
@@ -29,6 +30,17 @@ export function TransactionList({
 }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [accountFilter, setAccountFilter] = useState("");
+
+  // The bank accounts and cards this month's rows came from, for telling them apart.
+  const accounts = useMemo(() => {
+    const found = new Map<string, string>();
+    for (const t of transactions) {
+      const account = accountOf(t.external_id);
+      if (account) found.set(account.key, account.label);
+    }
+    return [...found].map(([key, label]) => ({ key, label })).sort((a, b) => a.label.localeCompare(b.label, "he"));
+  }, [transactions]);
   const [newType, setNewType] = useState<"expense" | "income">("expense");
 
   const categoryName = useMemo(
@@ -39,6 +51,8 @@ export function TransactionList({
   const uncategorizedCount = transactions.filter((t) => t.type === "expense" && !t.category_id).length;
 
   const visible = transactions.filter((t) => {
+    if (accountFilter === "manual" && t.external_id) return false;
+    if (accountFilter && accountFilter !== "manual" && accountOf(t.external_id)?.key !== accountFilter) return false;
     if (categoryFilter === "income" && t.type !== "income") return false;
     if (categoryFilter === UNCATEGORIZED && (t.type !== "expense" || t.category_id)) return false;
     if (categoryFilter && categoryFilter !== "income" && categoryFilter !== UNCATEGORIZED) {
@@ -154,6 +168,21 @@ export function TransactionList({
         </label>
       </div>
 
+      {accounts.length > 0 && (
+        <label className="block">
+          <span className="sr-only">סינון לפי חשבון</span>
+          <select className="field" value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
+            <option value="">כל החשבונות והכרטיסים</option>
+            {accounts.map((account) => (
+              <option key={account.key} value={account.key}>
+                {account.label}
+              </option>
+            ))}
+            <option value="manual">נרשם ידנית או בבוט</option>
+          </select>
+        </label>
+      )}
+
       {uncategorizedCount > 0 && categoryFilter !== UNCATEGORIZED && (
         <button
           type="button"
@@ -216,7 +245,7 @@ export function TransactionList({
                           >
                             {label}
                             {t.source === "bank"
-                              ? ", מהבנק"
+                              ? `, ${accountOf(t.external_id)?.label ?? "מהבנק"}`
                               : t.user_id && memberNames[t.user_id]
                                 ? `, ${memberNames[t.user_id]}`
                                 : ""}

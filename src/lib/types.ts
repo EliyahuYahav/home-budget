@@ -20,6 +20,8 @@ export interface Transaction {
   description: string;
   occurred_on: string; // YYYY-MM-DD
   source: "manual" | "chat" | "bank";
+  /** The id the bank sync gave the row: "<company>:<account>:<the bank's own id>". */
+  external_id?: string | null;
   /** Paid with cash already counted at withdrawal. See settleCash in budget.ts. */
   paid_in_cash?: boolean;
   created_at: string;
