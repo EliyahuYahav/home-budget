@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   addRecurringIncome,
   deleteRecurringIncome,
@@ -5,6 +6,7 @@ import {
   updateDisplayName,
 } from "@/app/actions";
 import { CopyCode } from "@/components/copy-code";
+import { ChevronEnd } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { VersionRow } from "@/components/version-row";
 import { Card, Money, PageTitle, SectionTitle } from "@/components/ui";
@@ -102,8 +104,10 @@ export default async function SettingsPage() {
         )}
         <ClaudeKeyForm hasKey={claudeKey.source === "household" || claudeKey.unreadable} canSave={isSecretBoxConfigured()} />
         <p className="text-sm text-muted">
-          מפתח יוצרים ב־platform.claude.com, תחת API keys, וכדאי להגדיר שם גם תקרת הוצאה. המפתח נשמר מוצפן
-          ולא מוצג שוב. הודעה לבוט עולה בערך אלפית שקל.
+          <Link href="/help#claude-key" className="font-semibold text-accent underline">
+            איך משיגים מפתח, צעד אחר צעד
+          </Link>
+          . המפתח נשמר מוצפן ולא מוצג שוב. הודעה לבוט עולה בערך אלפית שקל.
           {!isSecretBoxConfigured() && " שמירת מפתחות עוד לא הוגדרה באתר הזה."}
         </p>
       </Card>
@@ -123,6 +127,11 @@ export default async function SettingsPage() {
           </SubmitButton>
         </form>
       </Card>
+
+      <Link href="/help" className="panel flex items-center justify-between p-4 font-bold">
+        <span>הסבר והדרכה</span>
+        <ChevronEnd className="text-muted" />
+      </Link>
 
       <VersionRow version={packageInfo.version} />
     </>

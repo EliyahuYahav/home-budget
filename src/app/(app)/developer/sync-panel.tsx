@@ -172,6 +172,9 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
             <code className="num">npm run agent</code> ומשאירים את החלון פתוח.
           </p>
         )}
+        <a href="/help#agent" className="text-sm font-semibold text-accent underline">
+          איך מקימים את הסוכן, צעד אחר צעד
+        </a>
       </Fold>
 
       <Fold
