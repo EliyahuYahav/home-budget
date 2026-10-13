@@ -163,6 +163,33 @@ create table if not exists public.next_month_incomes (
   primary key (household_id, payer)
 );
 
+-- Which month's report each household was already sent, so none is sent twice. Written and
+-- read only by the server's scheduled job; members have no access to it at all.
+create table if not exists public.report_log (
+  household_id uuid not null references public.households (id) on delete cascade,
+  period       text not null,
+  sent_at      timestamptz not null default now(),
+  primary key (household_id, period)
+);
+
+-- A Telegram chat that a member linked to the household's bot. Rows are written only by the
+-- server, when the chat presents a code that member made; members may see and remove them.
+create table if not exists public.telegram_chats (
+  chat_id      bigint primary key,
+  household_id uuid not null references public.households (id) on delete cascade,
+  user_id      uuid not null references auth.users (id) on delete cascade,
+  linked_at    timestamptz not null default now()
+);
+
+-- A one-time code a signed-in member makes to link their Telegram chat. It is sent to the
+-- bot by the link the settings screen shows, and is good for a quarter of an hour.
+create table if not exists public.telegram_link_codes (
+  code         text primary key check (length(code) >= 32),
+  household_id uuid not null references public.households (id) on delete cascade,
+  user_id      uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  expires_at   timestamptz not null default now() + interval '15 minutes'
+);
+
 create index if not exists bank_sync_runs_household_idx
   on public.bank_sync_runs (household_id, created_at desc);
 
@@ -201,6 +228,9 @@ alter table public.bank_sync_settings enable row level security;
 alter table public.bank_sync_runs     enable row level security;
 alter table public.household_secrets  enable row level security;
 alter table public.next_month_incomes enable row level security;
+alter table public.report_log          enable row level security;
+alter table public.telegram_chats      enable row level security;
+alter table public.telegram_link_codes enable row level security;
 
 -- Nothing here is for visitors who are not signed in. Row level security already returns
 -- them nothing; taking the table privileges away as well means a policy mistake alone
@@ -208,8 +238,14 @@ alter table public.next_month_incomes enable row level security;
 revoke all on public.households, public.household_members, public.categories,
   public.recurring_incomes, public.transactions, public.chat_messages,
   public.bank_sync_settings, public.bank_sync_runs, public.household_secrets,
-  public.next_month_incomes
+  public.next_month_incomes, public.report_log, public.telegram_chats, public.telegram_link_codes
   from anon;
+
+-- The report log is the server's alone. A member cannot link a chat by writing the row
+-- themselves, and can do nothing with a code but make one: the server reads it and removes it.
+revoke all on public.report_log from authenticated;
+revoke insert, update on public.telegram_chats from authenticated;
+revoke select, update, delete on public.telegram_link_codes from authenticated;
 
 -- A policy decides which rows may be updated, not which columns. Without these, a member
 -- could move their own membership row to another household's id, or replace the invite
@@ -273,6 +309,21 @@ create policy next_month_incomes_all on public.next_month_incomes
   for all to authenticated
   using (public.is_household_member(household_id))
   with check (public.is_household_member(household_id));
+
+drop policy if exists telegram_chats_select on public.telegram_chats;
+create policy telegram_chats_select on public.telegram_chats
+  for select to authenticated using (public.is_household_member(household_id));
+
+drop policy if exists telegram_chats_delete on public.telegram_chats;
+create policy telegram_chats_delete on public.telegram_chats
+  for delete to authenticated using (public.is_household_member(household_id));
+
+drop policy if exists telegram_link_codes_insert on public.telegram_link_codes;
+create policy telegram_link_codes_insert on public.telegram_link_codes
+  for insert to authenticated
+  with check (public.is_household_member(household_id) and user_id = auth.uid());
+
+drop policy if exists telegram_link_codes_delete on public.telegram_link_codes;
 
 drop policy if exists household_secrets_all on public.household_secrets;
 create policy household_secrets_all on public.household_secrets

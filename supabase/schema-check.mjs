@@ -176,6 +176,40 @@ expect("an unknown kind of category is refused", !r.ok, show(r));
 r = await as("B", "update public.categories set fund_opening = -1 where household_id = $1 and name = 'ביטוח רכב'", [hidB]);
 expect("a fund cannot open below zero", !r.ok, show(r));
 
+// --- telegram links and the report log
+const code = "0123456789abcdef0123456789abcdef";
+r = await as("B", "insert into public.telegram_link_codes (code, household_id) values ($1, $2)", [code, hidB]);
+expect("a member can make a code to link their chat", r.ok, show(r));
+r = await as("B", "select * from public.telegram_link_codes");
+expect("a code cannot be read back, even by its maker", !r.ok, show(r));
+r = await as("A", "insert into public.telegram_link_codes (code, household_id) values ($1, $2)", ["a".repeat(32), hidB]);
+expect("other household cannot make a code for B", !r.ok, show(r));
+r = await as("B", "insert into public.telegram_link_codes (code, household_id, user_id) values ($1, $2, $3)", ["b".repeat(32), hidB, users.A]);
+expect("a code cannot be made in another member's name", !r.ok, show(r));
+r = await as("B", "insert into public.telegram_link_codes (code, household_id) values ('short', $1)", [hidB]);
+expect("a short code is refused", !r.ok, show(r));
+r = await as("A", "delete from public.telegram_link_codes");
+expect("codes cannot be removed by members", !r.ok, show(r));
+r = await as("B", "insert into public.telegram_chats (chat_id, household_id, user_id) values (42, $1, $2)", [hidB, users.B]);
+expect("a member cannot link a chat by writing the row", !r.ok, show(r));
+await db.query("insert into public.telegram_chats (chat_id, household_id, user_id) values (42, $1, $2)", [hidB, users.B]);
+r = await as("A", "select * from public.telegram_chats");
+expect("other household cannot see B's linked chat", r.ok && r.rows.length === 0, show(r));
+r = await as("A", "delete from public.telegram_chats where chat_id = 42");
+expect("other household cannot unlink B's chat", blocked(r), show(r));
+r = await as("B", "update public.telegram_chats set household_id = $1 where chat_id = 42", [hidA]);
+expect("a linked chat cannot be moved to another household", !r.ok, show(r));
+r = await as("B", "delete from public.telegram_chats where chat_id = 42");
+expect("a member can unlink their chat", r.ok && r.affected === 1, show(r));
+r = await as("B", "select * from public.report_log");
+expect("members cannot read the report log", !r.ok, show(r));
+r = await as("B", "insert into public.report_log (household_id, period) values ($1, '2026-09')", [hidB]);
+expect("members cannot write the report log", !r.ok, show(r));
+for (const table of ["report_log", "telegram_chats", "telegram_link_codes"]) {
+  r = await as("anon", `select * from public.${table}`);
+  expect(`signed-out visitor cannot read ${table}`, !r.ok, show(r));
+}
+
 // --- the monthly report switch
 r = await as("B", "update public.households set monthly_report = false where id = $1", [hidB]);
 expect("a household can turn its monthly report off", r.ok && r.affected === 1, show(r));

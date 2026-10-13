@@ -9,6 +9,10 @@ const PUBLIC_PATHS = ["/login"];
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Called by Telegram and by the scheduler, never by a signed-in browser: each route
+  // there checks a secret of its own.
+  if (pathname.startsWith("/api/")) return NextResponse.next();
+
   if (!isSupabaseConfigured()) {
     if (pathname === "/setup") return NextResponse.next();
     return NextResponse.redirect(new URL("/setup", request.url));
