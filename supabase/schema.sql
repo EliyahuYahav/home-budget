@@ -12,6 +12,8 @@ create table if not exists public.households (
   invite_code text not null unique default upper(substr(md5(gen_random_uuid()::text), 1, 8)),
   -- Closed once both partners are in: join_household refuses a third member.
   max_members int not null default 2,
+  -- Whether the members are sent the report of each month that ends.
+  monthly_report boolean not null default true,
   created_at  timestamptz not null default now()
 );
 
@@ -169,6 +171,7 @@ alter table public.bank_sync_runs
 
 -- For databases created before the member limit existed.
 alter table public.households add column if not exists max_members int not null default 2;
+alter table public.households add column if not exists monthly_report boolean not null default true;
 
 -- ---------------------------------------------------------------------------
 -- Row level security: a user sees and changes only their own household's rows.
@@ -210,11 +213,12 @@ revoke all on public.households, public.household_members, public.categories,
 
 -- A policy decides which rows may be updated, not which columns. Without these, a member
 -- could move their own membership row to another household's id, or replace the invite
--- code and member limit. Members may only rename themselves and their household.
+-- code and member limit. Members may only rename themselves and their household, and turn
+-- its monthly report on or off.
 revoke insert, update, delete on public.household_members from authenticated;
 grant update (display_name) on public.household_members to authenticated;
 revoke insert, update, delete on public.households from authenticated;
-grant update (name) on public.households to authenticated;
+grant update (name, monthly_report) on public.households to authenticated;
 
 drop policy if exists households_select on public.households;
 create policy households_select on public.households

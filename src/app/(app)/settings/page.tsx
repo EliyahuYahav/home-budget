@@ -15,19 +15,26 @@ import { Card, Money, PageTitle, SectionTitle } from "@/components/ui";
 import { getMembers, getNextMonthPayers, getRecentBankPayers, getRecurringIncomes, requireContext } from "@/lib/data";
 import { shiftDate, shortDate, todayISO } from "@/lib/dates";
 import { ClaudeKeyForm } from "@/components/claude-key-form";
+import { ReportSettings } from "@/components/report-settings";
+import { isEmailConfigured } from "@/lib/email";
 import { resolveClaudeKey } from "@/lib/claude-key";
 import { isSecretBoxConfigured } from "@/lib/secret-box";
 import packageInfo from "../../../../package.json";
 
 export default async function SettingsPage() {
   const ctx = await requireContext();
-  const [incomes, members, claudeKey, nextMonthPayers, recentPayers] = await Promise.all([
+  const [incomes, members, claudeKey, nextMonthPayers, recentPayers, reportSwitch, auth] = await Promise.all([
     getRecurringIncomes(ctx),
     getMembers(ctx),
     resolveClaudeKey(ctx),
     getNextMonthPayers(ctx),
     getRecentBankPayers(ctx, shiftDate(todayISO(), -120)),
+    ctx.supabase.from("households").select("monthly_report").eq("id", ctx.household.id).maybeSingle(),
+    ctx.supabase.auth.getClaims(),
   ]);
+  // A database without the column yet has no report to turn on or off.
+  const reportEnabled = reportSwitch.error ? null : reportSwitch.data?.monthly_report !== false;
+  const myEmail = typeof auth.data?.claims.email === "string" ? auth.data.claims.email : "";
   const payerSuggestions = recentPayers.filter(
     ({ name }) => !nextMonthPayers.some((payer) => name.toLowerCase().includes(payer.toLowerCase())),
   );
@@ -188,6 +195,18 @@ export default async function SettingsPage() {
           {!isSecretBoxConfigured() && " שמירת מפתחות עוד לא הוגדרה באתר הזה."}
         </p>
       </Card>
+
+      {reportEnabled !== null && (
+        <Card className="space-y-3">
+          <SectionTitle>דוח חודשי במייל</SectionTitle>
+          <p className="text-muted">
+            {reportEnabled
+              ? "בתחילת כל חודש נשלח לשניכם מייל שמסכם את החודש שנגמר: כמה נכנס ויצא, לאן הלך הכסף, חריגות, והתקדמות החיסכון."
+              : "הדוח החודשי כבוי. כשהוא פועל, בתחילת כל חודש נשלח לשניכם מייל שמסכם את החודש שנגמר."}
+          </p>
+          <ReportSettings enabled={reportEnabled} canSend={isEmailConfigured()} email={myEmail} />
+        </Card>
+      )}
 
       <Card className="space-y-3">
         <SectionTitle>החשבון שלי</SectionTitle>

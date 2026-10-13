@@ -7,7 +7,10 @@ import { interpretMessage } from "@/lib/bot";
 import { resolveClaudeKey } from "@/lib/claude-key";
 import { formatILS, isCashCategory, summarizeMonth } from "@/lib/budget";
 import { getMonthData, requireContext } from "@/lib/data";
-import { isValidDate, monthOf, shortDate, todayISO } from "@/lib/dates";
+import { isValidDate, monthLabel, monthOf, shiftMonth, shortDate, todayISO } from "@/lib/dates";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { isEmptyReport, renderReportEmail } from "@/lib/report";
+import { collectReport } from "@/lib/report-data";
 import { isSecretBoxConfigured, sealSecret } from "@/lib/secret-box";
 import { createClient } from "@/lib/supabase/server";
 import { payeeKey } from "../../sync/payee.mjs";
@@ -109,6 +112,44 @@ export async function updateDisplayName(form: FormData) {
     .eq("user_id", ctx.userId);
   if (error) throw new Error(error.message);
   revalidateApp();
+}
+
+// --------------------------------------------------------------------------
+// The monthly report
+// --------------------------------------------------------------------------
+
+export async function setMonthlyReport(_prev: FormState, form: FormData): Promise<FormState> {
+  const ctx = await requireContext();
+  const enabled = text(form, "enabled") === "on";
+  const { error } = await ctx.supabase
+    .from("households")
+    .update({ monthly_report: enabled })
+    .eq("id", ctx.household.id);
+  if (error) return { error: `ההגדרה לא נשמרה: ${error.message}` };
+  revalidateApp();
+  return { message: enabled ? "הדוח יישלח בתחילת כל חודש." : "הדוח החודשי כבוי." };
+}
+
+/** Sends the report to whoever asked, and to nobody else: the month that ended, or this one so far. */
+export async function sendReportNow(): Promise<FormState> {
+  const ctx = await requireContext();
+  if (!isEmailConfigured()) return { error: "שליחת מייל עוד לא הוגדרה באתר הזה." };
+  const { data: auth } = await ctx.supabase.auth.getClaims();
+  const email = auth?.claims.email;
+  if (typeof email !== "string" || !email) return { error: "לא מצאתי כתובת מייל בחשבון שלך." };
+
+  const thisMonth = monthOf(todayISO());
+  let report = await collectReport(ctx, shiftMonth(thisMonth, -1));
+  if (isEmptyReport(report)) report = await collectReport(ctx, thisMonth);
+  if (isEmptyReport(report)) return { error: "עוד לא נרשם כלום, אז אין על מה לדווח." };
+
+  try {
+    await sendEmail({ to: [email], ...renderReportEmail(report) });
+  } catch (error) {
+    console.error("sending a report failed", error);
+    return { error: "המייל לא נשלח. נסו שוב בעוד כמה דקות." };
+  }
+  return { message: `הדוח של ${monthLabel(report.month)} נשלח אליך.` };
 }
 
 // --------------------------------------------------------------------------
