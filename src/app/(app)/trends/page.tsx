@@ -2,10 +2,20 @@ import { Card, EmptyNote, Money, MonthNav, PageTitle, SectionTitle } from "@/com
 import { dailySpending, formatILS, settleCash, summarizeMonth } from "@/lib/budget";
 import { getCategories, getRecurringIncomes, getTransactions, requireContext } from "@/lib/data";
 import { isValidMonth, monthLabel, monthOf, shiftMonth, shortDate, todayISO } from "@/lib/dates";
-import { categoryTotals, changeFrom, monthlyTotals, projectedSpending } from "@/lib/trends";
+import {
+  averageMonth,
+  categoryTotals,
+  categoryTrends,
+  changeFrom,
+  monthlyTotals,
+  projectedSpending,
+  topPayees,
+} from "@/lib/trends";
 
 const MONTHS_SHOWN = 6;
 const CATEGORIES_SHOWN = 7;
+const TRENDS_SHOWN = 8;
+const PAYEES_SHOWN = 8;
 
 /** 8,400 -> "8.4K", so six bar labels fit across a phone. */
 function compact(amount: number): string {
@@ -60,6 +70,18 @@ export default async function TrendsPage({ searchParams }: PageProps<"/trends">)
     .filter((t) => t.type === "expense")
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
+
+  const allTransactions = perMonth.flat();
+  const average = averageMonth(totals, month);
+  const trends = categoryTrends({ month, months, transactions: allTransactions, categories })
+    // A category of a few shekels either way is noise next to the others.
+    .filter((trend) => Math.max(trend.current, trend.average) >= 20)
+    .slice(0, TRENDS_SHOWN);
+  const trendMax = Math.max(...trends.map((trend) => Math.max(trend.current, trend.average)), 1);
+  const payees = topPayees(allTransactions, categories, PAYEES_SHOWN);
+  const monthsWithData = totals.filter((t) => t.hasData).length;
+  const isCurrentMonth = month === monthOf(today);
+  const left = summary.income - summary.spent - summary.saved;
 
   const chartMax = Math.max(...totals.map((t) => Math.max(t.spent, t.income)), 1);
   const hasIncome = totals.some((t) => t.income > 0);
@@ -119,6 +141,21 @@ export default async function TrendsPage({ searchParams }: PageProps<"/trends">)
                   ) : (
                     <>
                       , ויישארו <Money amount={spendable - projected} />.
+                    </>
+                  )}
+                </li>
+              )}
+              {!summary.incomeIsEstimated && summary.income > 0 && (
+                <li className={left < 0 ? "text-danger" : ""}>
+                  {left >= 0 ? (
+                    <>
+                      נשארו <Money amount={left} className="font-bold" />, שהם{" "}
+                      <span className="num">{Math.round((left / summary.income) * 100)}%</span> מההכנסה, אחרי הוצאות
+                      וחיסכון.
+                    </>
+                  ) : (
+                    <>
+                      יצא <Money amount={-left} className="font-bold" /> יותר ממה שנכנס.
                     </>
                   )}
                 </li>
@@ -188,6 +225,97 @@ export default async function TrendsPage({ searchParams }: PageProps<"/trends">)
             </Card>
           )}
         </>
+      )}
+
+      {trends.length > 0 && (
+        <Card className="space-y-3">
+          <div>
+            <SectionTitle>מול חודש רגיל</SectionTitle>
+            <p className="flex items-center gap-2 text-sm text-muted">
+              <span className="inline-block h-3 w-0.5 bg-ink" aria-hidden="true" />
+              הקו מסמן את הממוצע של {monthsWithData - 1 === 1 ? "החודש הקודם" : `${monthsWithData - 1} החודשים האחרים`}
+              {isCurrentMonth ? "; החודש הנוכחי עוד לא נגמר" : ""}
+            </p>
+          </div>
+          <ul className="space-y-3">
+            {trends.map((trend) => {
+              const over = trend.current > trend.average;
+              return (
+                <li key={trend.id ?? "none"} className="space-y-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span>{trend.name}</span>
+                    <span>
+                      <Money amount={trend.current} className={`font-bold ${over ? "text-warn" : ""}`} />{" "}
+                      <span className="text-sm text-muted">
+                        לרוב <Money amount={trend.average} />
+                      </span>
+                    </span>
+                  </div>
+                  <div className="relative h-2 rounded-full bg-line" aria-hidden="true">
+                    <div
+                      className={`h-full rounded-full ${over ? "bg-warn" : "bg-accent"}`}
+                      style={{ width: `${(trend.current / trendMax) * 100}%` }}
+                    />
+                    <div
+                      className="absolute -top-1 h-4 w-0.5 bg-ink"
+                      style={{ insetInlineStart: `${(trend.average / trendMax) * 100}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
+      {average && (
+        <Card className="space-y-3">
+          <SectionTitle>
+            חודש ממוצע{average.months > 1 ? ` (לפי ${average.months} חודשים)` : " (לפי חודש אחד)"}
+          </SectionTitle>
+          <dl className="grid grid-cols-3 text-center">
+            <div>
+              <dt className="text-sm text-muted">נכנס</dt>
+              <dd className="text-lg font-bold">
+                <Money amount={average.income} />
+              </dd>
+            </div>
+            <div className="border-s border-line">
+              <dt className="text-sm text-muted">יצא</dt>
+              <dd className="text-lg font-bold">
+                <Money amount={average.spent} />
+              </dd>
+            </div>
+            <div className="border-s border-line">
+              <dt className="text-sm text-muted">נשאר</dt>
+              <dd className={`text-lg font-bold ${average.left < 0 ? "text-danger" : "text-good"}`}>
+                <Money amount={average.left} />
+              </dd>
+            </div>
+          </dl>
+          <p className="text-sm text-muted">
+            בלי {monthLabel(month)}. &quot;נשאר&quot; הוא מה שנכנס פחות הוצאות וחיסכון.
+          </p>
+        </Card>
+      )}
+
+      {payees.length > 0 && monthsWithData > 1 && (
+        <Card className="space-y-1">
+          <SectionTitle>לאן הלך הכי הרבה בחצי השנה</SectionTitle>
+          <ul className="divide-y divide-line">
+            {payees.map((payee) => (
+              <li key={payee.name} className="flex items-center gap-3 py-2.5">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{payee.name}</span>
+                  <span className="block text-sm text-muted">
+                    {payee.times === 1 ? "פעם אחת" : `${payee.times} פעמים`}
+                  </span>
+                </span>
+                <Money amount={payee.spent} className="font-bold" />
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       <Card className="space-y-3">

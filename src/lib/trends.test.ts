@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { dailySpending } from "./budget";
 import { dayLabel } from "./dates";
-import { categoryTotals, changeFrom, monthlyTotals, projectedSpending } from "./trends";
+import {
+  averageMonth,
+  categoryTotals,
+  categoryTrends,
+  changeFrom,
+  monthlyTotals,
+  projectedSpending,
+  topPayees,
+} from "./trends";
 import type { Category, Transaction } from "./types";
 
 const category = (id: string, over: Partial<Category> = {}): Category => ({
@@ -165,5 +173,75 @@ describe("dayLabel", () => {
     expect(dayLabel("2026-10-06", "2026-10-12")).toBe("יום שלישי 6.10");
     expect(dayLabel("2026-10-03", "2026-10-12")).toBe("שבת 3.10");
     expect(dayLabel("2026-09-30", "2026-10-01")).toBe("אתמול");
+  });
+});
+
+describe("averageMonth", () => {
+  const row = (month: string, income: number, spent: number, saved = 0, hasData = true) => ({
+    month,
+    income,
+    spent,
+    saved,
+    hasData,
+  });
+
+  it("averages the other months that have data", () => {
+    const totals = [row("2026-07", 0, 0, 0, false), row("2026-08", 10000, 8000, 500), row("2026-09", 12000, 9000, 500), row("2026-10", 3000, 2000)];
+    expect(averageMonth(totals, "2026-10")).toEqual({ months: 2, income: 11000, spent: 8500, left: 2000 });
+  });
+
+  it("has nothing to say when the month looked at is the only one", () => {
+    expect(averageMonth([row("2026-10", 3000, 2000)], "2026-10")).toBeNull();
+  });
+});
+
+describe("categoryTrends", () => {
+  const cats = [category("groceries"), category("fun"), category("savings", { kind: "saving" })];
+  const months = ["2026-08", "2026-09", "2026-10"];
+
+  it("puts this month next to the average of the earlier months", () => {
+    const trends = categoryTrends({
+      month: "2026-10",
+      months,
+      categories: cats,
+      transactions: [
+        tx(1000, "groceries", "2026-08-05"),
+        tx(1400, "groceries", "2026-09-05"),
+        tx(300, "fun", "2026-09-10"),
+        tx(900, "groceries", "2026-10-03"),
+        tx(500, "savings", "2026-10-01"),
+      ],
+    });
+    expect(trends).toEqual([
+      { id: "groceries", name: "groceries", current: 900, average: 1200 },
+      // Bought in one of two earlier months: the month without it counts as zero.
+      { id: "fun", name: "fun", current: 0, average: 150 },
+    ]);
+  });
+
+  it("is empty when there is no earlier month with data", () => {
+    expect(categoryTrends({ month: "2026-10", months, categories: cats, transactions: [tx(900, "groceries", "2026-10-03")] })).toEqual([]);
+  });
+});
+
+describe("topPayees", () => {
+  it("adds up by name, treating installments and spacing as the same payee", () => {
+    const cats = [category("groceries"), category("savings", { kind: "saving" })];
+    const payees = topPayees(
+      [
+        tx(200, "groceries", "2026-09-01", { description: "שופרסל דיל" }),
+        tx(150, "groceries", "2026-10-01", { description: "שופרסל  דיל (תשלום 2 מתוך 6)" }),
+        tx(90, null, "2026-10-02", { description: "פז" }),
+        tx(999, "savings", "2026-10-02", { description: "קרן השתלמות" }),
+        tx(50, null, "2026-10-02", { description: "" }),
+        tx(5000, null, "2026-10-02", { description: "משכורת", type: "income" }),
+      ],
+      cats,
+      5,
+    );
+    expect(payees).toEqual([
+      { name: "שופרסל דיל", spent: 350, times: 2 },
+      { name: "פז", spent: 90, times: 1 },
+    ]);
   });
 });
