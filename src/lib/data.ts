@@ -84,21 +84,42 @@ export async function getNextMonthPayers(ctx: AppContext): Promise<string[]> {
   return error ? [] : (data ?? []).map((row) => row.payer as string);
 }
 
-/** Who paid into the bank account lately, by description, most recent first: the candidates to choose a payer from. */
-export async function getRecentBankPayers(ctx: AppContext, since: string): Promise<string[]> {
+export interface BankPayer {
+  /** The bank's description of who paid. */
+  name: string;
+  /** The latest such income. */
+  date: string;
+  amount: number;
+}
+
+/**
+ * Who paid into the bank account around the turn of a month lately: the incomes that could be
+ * a salary for the month that begins. Only the last three days of a month and its 1st count,
+ * which is where such a salary lands; one entry per payer, the most recent first.
+ */
+export async function getRecentBankPayers(ctx: AppContext, since: string): Promise<BankPayer[]> {
   const { data, error } = await ctx.supabase
     .from("transactions")
-    .select("description")
+    .select("description, occurred_on, amount")
     .eq("household_id", ctx.household.id)
     .eq("type", "income")
     .eq("source", "bank")
     .gte("occurred_on", since)
     .order("occurred_on", { ascending: false })
-    .limit(200);
+    .limit(300);
   if (error) throw new Error(error.message);
-  // An income already counted for the next month carries a note of the day it arrived.
-  const names = (data ?? []).map((row) => String(row.description).replace(/ \(נכנס ב־[\d.]+\)$/, "").trim());
-  return [...new Set(names.filter(Boolean))].slice(0, 8);
+
+  const payers = new Map<string, BankPayer>();
+  for (const row of data ?? []) {
+    const date = String(row.occurred_on);
+    const day = Number(date.slice(8, 10));
+    const lastDay = new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).getUTCDate();
+    if (day !== 1 && day < lastDay - 2) continue;
+    // An income already counted for the next month carries a note of the day it arrived.
+    const name = String(row.description).replace(/ \(נכנס ב־[\d.]+\)$/, "").trim();
+    if (name && !payers.has(name)) payers.set(name, { name, date, amount: num(row.amount) });
+  }
+  return [...payers.values()].slice(0, 5);
 }
 
 export async function getMembers(ctx: AppContext): Promise<Member[]> {

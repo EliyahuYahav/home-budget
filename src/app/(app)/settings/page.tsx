@@ -8,12 +8,12 @@ import {
   updateDisplayName,
 } from "@/app/actions";
 import { CopyCode } from "@/components/copy-code";
-import { ChevronEnd } from "@/components/icons";
+import { ChevronDown, ChevronEnd } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { VersionRow } from "@/components/version-row";
 import { Card, Money, PageTitle, SectionTitle } from "@/components/ui";
 import { getMembers, getNextMonthPayers, getRecentBankPayers, getRecurringIncomes, requireContext } from "@/lib/data";
-import { shiftDate, todayISO } from "@/lib/dates";
+import { shiftDate, shortDate, todayISO } from "@/lib/dates";
 import { ClaudeKeyForm } from "@/components/claude-key-form";
 import { resolveClaudeKey } from "@/lib/claude-key";
 import { isSecretBoxConfigured } from "@/lib/secret-box";
@@ -29,7 +29,7 @@ export default async function SettingsPage() {
     getRecentBankPayers(ctx, shiftDate(todayISO(), -120)),
   ]);
   const payerSuggestions = recentPayers.filter(
-    (name) => !nextMonthPayers.some((payer) => name.toLowerCase().includes(payer.toLowerCase())),
+    ({ name }) => !nextMonthPayers.some((payer) => name.toLowerCase().includes(payer.toLowerCase())),
   );
   const totalIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
 
@@ -81,56 +81,72 @@ export default async function SettingsPage() {
       <Card className="space-y-3">
         <SectionTitle>משכורת שנכנסת בסוף החודש</SectionTitle>
         <p className="text-sm text-muted">
-          יש משכורות שנכנסות לפעמים ב־31 ולפעמים ב־1, והן הכסף של החודש שמתחיל. כשמסמנים כאן ממי המשכורת,
-          הסנכרון מהבנק רושם אותה על ה־1 בחודש הבא אם היא נכנסה בשלושת הימים האחרונים של החודש. הכנסות
-          ממקורות אחרים נשארות בתאריך שלהן.
+          משכורת שנכנסת לפעמים ב־31 ולפעמים ב־1 היא הכסף של החודש שמתחיל. מסמנים כאן ממי היא, והסנכרון
+          רושם אותה על ה־1 בחודש הבא. הכנסות ממקורות אחרים לא זזות.
         </p>
+
         {nextMonthPayers.length > 0 && (
-          <ul className="divide-y divide-line">
-            {nextMonthPayers.map((payer) => (
-              <li key={payer} className="flex items-center justify-between gap-3 py-2.5">
-                <span className="min-w-0 truncate">{payer}</span>
-                <form action={removeNextMonthPayer}>
-                  <input type="hidden" name="payer" value={payer} />
-                  <SubmitButton className="text-sm font-semibold text-danger underline" pendingLabel="מסיר…">
-                    הסרה
-                  </SubmitButton>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-        {payerSuggestions.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-sm font-semibold">מי שהכניס כסף לחשבון לאחרונה. לחיצה מסמנת:</p>
-            <div className="flex flex-wrap gap-2">
-              {payerSuggestions.map((name) => (
-                <form key={name} action={addNextMonthPayer}>
-                  <input type="hidden" name="payer" value={name} />
-                  <SubmitButton
-                    className="max-w-full truncate rounded-full border border-line bg-card px-3 py-1.5 text-sm font-semibold"
-                    pendingLabel="מסמן…"
-                  >
-                    + {name}
-                  </SubmitButton>
-                </form>
+          <div className="space-y-1.5">
+            <p className="text-sm font-semibold">מסומנים</p>
+            <ul className="divide-y divide-line rounded-2xl border border-line">
+              {nextMonthPayers.map((payer) => (
+                <li key={payer} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className="min-w-0 flex-1 break-words text-[0.95rem] font-semibold">{payer}</span>
+                  <form action={removeNextMonthPayer} className="shrink-0">
+                    <input type="hidden" name="payer" value={payer} />
+                    <SubmitButton className="text-sm font-semibold text-danger underline" pendingLabel="מסיר…">
+                      הסרה
+                    </SubmitButton>
+                  </form>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         )}
-        <form action={addNextMonthPayer} className="flex items-end gap-3">
-          <label className="min-w-0 flex-1 space-y-1">
-            <span className="text-sm font-semibold">או חלק מהתיאור, כפי שהוא מופיע בבנק</span>
-            <input className="field" name="payer" placeholder="למשל: משרד הביטחון" minLength={2} maxLength={100} required />
-          </label>
-          <SubmitButton className="btn btn-quiet" pendingLabel="מוסיף…">
-            הוספה
-          </SubmitButton>
-        </form>
-        <p className="text-sm text-muted">
-          משכורות שכבר נרשמו יעברו לחודש הנכון בסנכרון הבא שקורא אותן. אם הסוכן רץ, הוא ייקח את השינוי
-          בריצה הבאה.
-        </p>
+
+        {payerSuggestions.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-sm font-semibold">נכנסו לחשבון סביב תחילת החודש</p>
+            <ul className="divide-y divide-line rounded-2xl border border-line">
+              {payerSuggestions.map(({ name, date, amount }) => (
+                <li key={name} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className="min-w-0 flex-1">
+                    <span className="line-clamp-2 break-words text-[0.95rem] font-semibold">{name}</span>
+                    <span className="block text-sm text-muted">
+                      <span className="num">{shortDate(date)}</span> · <Money amount={amount} />
+                    </span>
+                  </span>
+                  <form action={addNextMonthPayer} className="shrink-0">
+                    <input type="hidden" name="payer" value={name} />
+                    <SubmitButton className="btn btn-quiet min-h-0 px-3 py-1.5 text-sm" pendingLabel="מסמן…">
+                      סימון
+                    </SubmitButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <details>
+          <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-accent">
+            להקליד בעצמי חלק מהתיאור
+            <ChevronDown className="chevron size-4" />
+          </summary>
+          <form action={addNextMonthPayer} className="flex items-end gap-3 pt-2">
+            <label className="min-w-0 flex-1 space-y-1">
+              <span className="text-sm text-muted">כפי שהוא מופיע בבנק, החלק שחוזר בכל חודש</span>
+              <input className="field" name="payer" placeholder="למשל: משרד הביטחון" minLength={2} maxLength={100} required />
+            </label>
+            <SubmitButton className="btn btn-quiet" pendingLabel="מוסיף…">
+              הוספה
+            </SubmitButton>
+          </form>
+        </details>
+
+        {nextMonthPayers.length > 0 && (
+          <p className="text-sm text-muted">משכורות שכבר נרשמו יעברו לחודש הנכון בסנכרון הבא שקורא אותן.</p>
+        )}
       </Card>
 
       <Card className="space-y-3">
