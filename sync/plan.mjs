@@ -94,6 +94,14 @@ export function toCandidates(sources, options = {}) {
   const skipped = { pending: 0, credits: 0, cardCharges: [], ownTransfers: transfers.described };
   const seen = new Map();
   const cardCharge = cards.map((company) => CARD_CHARGE[company]).filter(Boolean);
+  // Banks also name a card by its last digits ("חיוב לכרטיס ויזה 0541") without naming the
+  // company, so the digits of every card read in this run are recognised too.
+  const cardDigits = sources
+    .filter((source) => source.kind === "card")
+    .flatMap((source) => source.accounts.map((account) => String(account.accountNumber).slice(-4)))
+    .filter((digits) => /^\d{4}$/.test(digits));
+  const namesCard = (name) =>
+    /כרטיס|ויזה|visa|מסטרקארד|mastercard/i.test(name) && cardDigits.some((digits) => name.includes(digits));
 
   for (const { company, kind, accounts } of sources) {
     for (const { accountNumber, txns } of accounts) {
@@ -116,7 +124,11 @@ export function toCandidates(sources, options = {}) {
           continue;
         }
         const name = String(txn.description ?? "").trim();
-        if (type === "expense" && kind === "bank" && cardCharge.some((pattern) => pattern.test(plainName(name)))) {
+        if (
+          type === "expense" &&
+          kind === "bank" &&
+          (cardCharge.some((pattern) => pattern.test(plainName(name))) || namesCard(name))
+        ) {
           skipped.cardCharges.push(`${israelDate(txn.date)} ${(-txn.chargedAmount).toFixed(2)} ${name}`);
           count.cardCharges += 1;
           continue;

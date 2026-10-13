@@ -143,6 +143,22 @@ describe("toCandidates", () => {
     expect(skipped.cardCharges).toEqual([]);
   });
 
+  it("leaves out a bank charge that names a card being read by its last digits", () => {
+    const bank = source(
+      [
+        txn({ identifier: 5, description: "חיוב לכרטיס ויזה 0541", chargedAmount: -15.85 }),
+        txn({ identifier: 6, description: "חיוב לכרטיס ויזה 9999", chargedAmount: -40 }),
+        txn({ identifier: 7, description: "תשלום 0541 לוועד הבית", chargedAmount: -35 }),
+      ],
+      { company: "discount", kind: "bank" },
+    );
+    const card = { company: "max", kind: "card", accounts: [{ accountNumber: "0541", txns: [] }] };
+    const { candidates, skipped } = toCandidates([bank, card]);
+    // The other card is not read, and digits alone are not enough without a word for "card".
+    expect(candidates.map((c) => c.description)).toEqual(["חיוב לכרטיס ויזה 9999", "תשלום 0541 לוועד הבית"]);
+    expect(skipped.cardCharges).toEqual(["2026-10-05 15.85 חיוב לכרטיס ויזה 0541"]);
+  });
+
   it("recognises a card's name printed with dots", () => {
     const bank = source([txn({ description: "כ.א.ל חיוב" })], { company: "discount", kind: "bank" });
     const { candidates } = toCandidates([bank], { cards: ["visaCal"] });
