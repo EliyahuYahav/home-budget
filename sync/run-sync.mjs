@@ -19,12 +19,28 @@ export class SetupError extends Error {}
 // The logins the sync can use: `id` is the name the login details are saved under, `company`
 // is the site it signs in to. A second login at the same company (each partner's own Max
 // account, say) is its own entry. The website's form (src/lib/bank-sources.ts) lists the same.
+// Only Discount and Max have been run against a real account; the rest are listed with the
+// login fields the library documents. One Zero is left out: it signs in with a one-time code.
+const bank = (id, fields) => ({ id, company: id, kind: "bank", fields });
+const card = (id, fields, company = id) => ({ id, company, kind: "card", fields });
 export const SOURCES = [
-  { id: "discount", company: "discount", kind: "bank", fields: ["id", "password", "num"] },
-  { id: "mizrahi", company: "mizrahi", kind: "bank", fields: ["username", "password"] },
-  { id: "max", company: "max", kind: "card", fields: ["username", "password"] },
-  { id: "max2", company: "max", kind: "card", fields: ["username", "password"] },
-  { id: "visaCal", company: "visaCal", kind: "card", fields: ["username", "password"] },
+  bank("discount", ["id", "password", "num"]),
+  bank("hapoalim", ["userCode", "password"]),
+  bank("leumi", ["username", "password"]),
+  bank("mizrahi", ["username", "password"]),
+  bank("beinleumi", ["username", "password"]),
+  bank("mercantile", ["id", "password", "num"]),
+  bank("otsarHahayal", ["username", "password"]),
+  bank("massad", ["username", "password"]),
+  bank("yahav", ["username", "nationalID", "password"]),
+  bank("pagi", ["username", "password"]),
+  card("max", ["username", "password"]),
+  card("max2", ["username", "password"], "max"),
+  card("visaCal", ["username", "password"]),
+  card("isracard", ["id", "card6Digits", "password"]),
+  card("amex", ["id", "card6Digits", "password"]),
+  card("beyahadBishvilha", ["id", "password"]),
+  card("behatsdaa", ["id", "password"]),
 ];
 
 const CHROME_PATHS = [
