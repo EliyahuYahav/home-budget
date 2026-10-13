@@ -334,6 +334,12 @@ export function TransactionList({
                             שולם במזומן (יורד ממשיכות המזומן של החודש)
                           </label>
                         )}
+                        {!income && (
+                          <label className="col-span-2 flex items-center gap-2.5">
+                            <input type="checkbox" className="size-5 accent-accent" name="applyToSame" defaultChecked />
+                            אותה קטגוריה לכל ההוצאות מאותו מקום שעדיין בלי קטגוריה
+                          </label>
+                        )}
                         <SubmitButton>שמירה</SubmitButton>
                         <button
                           className="btn btn-danger"

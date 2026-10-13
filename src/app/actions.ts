@@ -10,6 +10,7 @@ import { getMonthData, requireContext } from "@/lib/data";
 import { isValidDate, monthOf, shortDate, todayISO } from "@/lib/dates";
 import { isSecretBoxConfigured, sealSecret } from "@/lib/secret-box";
 import { createClient } from "@/lib/supabase/server";
+import { payeeKey } from "../../sync/payee.mjs";
 import type { ChatMessage, ParsedEntry } from "@/lib/types";
 
 export interface FormState {
@@ -154,7 +155,38 @@ export async function updateTransaction(form: FormData) {
     .eq("id", text(form, "id"))
     .eq("household_id", ctx.household.id);
   if (error) throw new Error(error.message);
+
+  const categoryId = text(form, "categoryId");
+  if (categoryId && form.get("applyToSame") === "on") {
+    await fileSamePayee(ctx, text(form, "description"), categoryId);
+  }
   revalidateApp();
+}
+
+/**
+ * Files every expense from the same payee that still has no category, in any month, under
+ * the category just chosen for one of them. Rows that already have a category are left alone.
+ */
+async function fileSamePayee(ctx: Awaited<ReturnType<typeof requireContext>>, description: string, categoryId: string) {
+  const key = payeeKey(description);
+  if (!key) return;
+  const { data, error } = await ctx.supabase
+    .from("transactions")
+    .select("id, description")
+    .eq("household_id", ctx.household.id)
+    .eq("type", "expense")
+    .is("category_id", null)
+    .limit(1000);
+  if (error) throw new Error(error.message);
+  const ids = (data ?? []).filter((row) => payeeKey(row.description) === key).map((row) => row.id as string);
+  for (let start = 0; start < ids.length; start += 100) {
+    const { error: updateError } = await ctx.supabase
+      .from("transactions")
+      .update({ category_id: categoryId })
+      .in("id", ids.slice(start, start + 100))
+      .eq("household_id", ctx.household.id);
+    if (updateError) throw new Error(updateError.message);
+  }
 }
 
 export async function deleteTransaction(form: FormData) {
