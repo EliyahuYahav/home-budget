@@ -220,10 +220,13 @@ interface Box {
   left: number;
   width: number;
   height: number;
+  /** The element's own corner rounding, so the lit area has the same shape as what it lights. */
+  radius: number;
 }
 
 const PADDING = 6;
-const DIM = "pointer-events-auto absolute bg-[rgb(16_14_40_/_0.72)]";
+/** Catches taps around the lit element, so nothing else is pressed by accident. */
+const BLOCK = "pointer-events-auto absolute";
 
 /**
  * A first-visit walk through the app: the screen dims and one element at a time stays lit,
@@ -290,8 +293,21 @@ function TourSteps() {
         timer = window.setTimeout(measure, 60);
         return;
       }
-      const rect = element.getBoundingClientRect();
-      setBox({ target: step.target, rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height } });
+      let { top, left, right, bottom } = element.getBoundingClientRect();
+      if (step.press) {
+        // A button's parts can stick out of its own box (the round bot button rises above
+        // the bar), and a lit area that cuts through them looks broken.
+        for (const part of element.querySelectorAll("*")) {
+          const r = part.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          top = Math.min(top, r.top);
+          left = Math.min(left, r.left);
+          right = Math.max(right, r.right);
+          bottom = Math.max(bottom, r.bottom);
+        }
+      }
+      const radius = parseFloat(getComputedStyle(element).borderTopLeftRadius) || 14;
+      setBox({ target: step.target, rect: { top, left, width: right - left, height: bottom - top, radius } });
     };
     timer = window.setTimeout(measure, 0);
     window.addEventListener("resize", measure);
@@ -301,7 +317,7 @@ function TourSteps() {
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, { capture: true });
     };
-  }, [here, index, step.target, step.optional]);
+  }, [here, index, step.target, step.optional, step.press]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -353,6 +369,11 @@ function TourSteps() {
     width: rect.width + PADDING * 2,
     height: rect.height + PADDING * 2,
   };
+  // The same rounding as the element, grown by the padding, and never more than a full pill.
+  const lit = {
+    ...hole,
+    borderRadius: Math.min(rect.radius + PADDING, Math.min(hole.width, hole.height) / 2),
+  };
   const last = index === STEPS.length - 1;
   // The explanation goes on whichever side of the element has more room.
   const below = rect.top + rect.height / 2 < window.innerHeight / 2;
@@ -364,19 +385,27 @@ function TourSteps() {
       aria-modal="true"
       aria-label="הדרכה באפליקציה"
     >
-      {/* Four dim panels around the lit element. They also catch taps, so nothing else is
-          pressed by accident; the gap between them is the element itself. */}
-      <div className={`inset-x-0 top-0 ${DIM}`} style={{ height: Math.max(hole.top, 0) }} />
-      <div className={`inset-x-0 bottom-0 ${DIM}`} style={{ top: hole.top + hole.height }} />
-      <div className={`left-0 ${DIM}`} style={{ top: hole.top, height: hole.height, width: Math.max(hole.left, 0) }} />
-      <div className={`right-0 ${DIM}`} style={{ top: hole.top, height: hole.height, left: hole.left + hole.width }} />
-      {/* Only a `press` step lets the tap through to the element. */}
-      {!step.press && <div className="pointer-events-auto absolute" style={hole} />}
+      {/* The lit area is a hole with the element's own rounded shape; its enormous shadow is
+          what dims the rest of the screen, so the dark edge follows the same curve. */}
       <div
         aria-hidden="true"
-        className={`absolute rounded-2xl ring-white ${step.press ? "animate-pulse ring-4" : "ring-2"}`}
-        style={hole}
+        className="absolute shadow-[0_0_0_200vmax_rgb(16_14_40_/_0.72)] transition-all duration-200 motion-reduce:transition-none"
+        style={lit}
       />
+      <div
+        aria-hidden="true"
+        className={`absolute border-2 border-white/85 transition-all duration-200 motion-reduce:transition-none ${
+          step.press ? "animate-pulse" : ""
+        }`}
+        style={lit}
+      />
+      {/* Four invisible panels around the element catch taps. */}
+      <div className={`inset-x-0 top-0 ${BLOCK}`} style={{ height: Math.max(hole.top, 0) }} />
+      <div className={`inset-x-0 bottom-0 ${BLOCK}`} style={{ top: hole.top + hole.height }} />
+      <div className={`left-0 ${BLOCK}`} style={{ top: hole.top, height: hole.height, width: Math.max(hole.left, 0) }} />
+      <div className={`right-0 ${BLOCK}`} style={{ top: hole.top, height: hole.height, left: hole.left + hole.width }} />
+      {/* Only a `press` step lets the tap through to the element. */}
+      {!step.press && <div className={BLOCK} style={hole} />}
 
       <div
         className="absolute inset-x-4"
