@@ -66,7 +66,7 @@ export function TransactionList({
 
   return (
     <div className="space-y-4">
-      <details className="panel">
+      <details className="panel" data-tour="tx-add">
         <summary className="flex cursor-pointer items-center gap-3 p-4 font-bold">
           <span className="flex size-8 items-center justify-center rounded-full bg-accent-soft text-accent">
             <PlusIcon className="size-5" />
@@ -124,7 +124,7 @@ export function TransactionList({
         </form>
       </details>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3" data-tour="tx-filter">
         <label>
           <span className="sr-only">חיפוש</span>
           <input
@@ -190,7 +190,7 @@ export function TransactionList({
         </EmptyNote>
       ) : (
         byDay.map(({ date, rows }) => (
-          <section key={date} className="space-y-1.5">
+          <section key={date} className="space-y-1.5" data-tour="tx-list">
             <h2 className="flex items-baseline justify-between px-1 text-sm font-bold text-muted">
               <span>{dayLabel(date, today)}</span>
               {sumOf(rows, "expense") > 0 && (

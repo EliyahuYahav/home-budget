@@ -177,7 +177,7 @@ export function ChatWindow({
             {error}
           </p>
         )}
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]" data-tour="chat-examples">
           {EXAMPLES.map((example) => (
             <button
               key={example}
@@ -190,7 +190,7 @@ export function ChatWindow({
             </button>
           ))}
         </div>
-        <form onSubmit={onSubmit} className="panel flex gap-2 rounded-full p-1.5 ps-4 focus-within:outline-2 focus-within:outline-accent">
+        <form onSubmit={onSubmit} data-tour="chat-input" className="panel flex gap-2 rounded-full p-1.5 ps-4 focus-within:outline-2 focus-within:outline-accent">
           <label className="sr-only" htmlFor="chat-input">
             הודעה לבוט
           </label>

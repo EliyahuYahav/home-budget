@@ -96,7 +96,7 @@ export default async function TrendsPage({ searchParams }: PageProps<"/trends">)
         <EmptyNote>עוד לא נרשם כלום ב{monthLabel(month)}.</EmptyNote>
       ) : (
         <>
-          <Card className="space-y-3">
+          <Card tour="trends-summary" className="space-y-3">
             <SectionTitle>סיכום {monthLabel(month)}</SectionTitle>
             <dl className="grid grid-cols-3 text-center">
               <div>
@@ -318,7 +318,7 @@ export default async function TrendsPage({ searchParams }: PageProps<"/trends">)
         </Card>
       )}
 
-      <Card className="space-y-3">
+      <Card tour="trends-chart" className="space-y-3">
         <div>
           <SectionTitle>הוצאות בחצי השנה האחרונה</SectionTitle>
           {hasIncome && (

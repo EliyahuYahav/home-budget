@@ -4,9 +4,20 @@ import { formatILS } from "@/lib/budget";
 import { monthLabel, shiftMonth } from "@/lib/dates";
 import { ChevronEnd, ChevronStart } from "./icons";
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Card({
+  children,
+  className = "",
+  tour,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Name the first-visit tour (components/tour.tsx) finds this card by. */
+  tour?: string;
+}) {
   return (
-    <section className={`panel p-4 ${className}`}>{children}</section>
+    <section className={`panel p-4 ${className}`} data-tour={tour}>
+      {children}
+    </section>
   );
 }
 
@@ -57,7 +68,7 @@ export function ProgressBar({
 export function MonthNav({ month, basePath }: { month: string; basePath: string }) {
   const link = "panel flex size-11 items-center justify-center rounded-full";
   return (
-    <nav aria-label="בחירת חודש" className="flex items-center justify-between gap-2">
+    <nav aria-label="בחירת חודש" data-tour="month-nav" className="flex items-center justify-between gap-2">
       <Link className={link} href={`${basePath}?m=${shiftMonth(month, -1)}`} aria-label="החודש הקודם">
         <ChevronStart />
       </Link>

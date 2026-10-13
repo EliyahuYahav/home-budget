@@ -3,50 +3,176 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-const STORAGE_KEY = "tour-done";
+const DONE_KEY = "tour-done";
+const STEP_KEY = "tour-step";
 
-// Each step lights up the element marked data-tour="<target>". All of them are on the home
-// screen or in the navigation bar, so the tour runs there.
-const STEPS = [
+interface Step {
+  /** The screen the step is on. */
+  path: string;
+  /** The element to light up: the one marked data-tour="<target>". */
+  target: string;
+  title: string;
+  text: string;
+  /** The user presses the lit element itself, which opens the next step's screen. */
+  press?: boolean;
+  /** Not on every screen (a list that can be empty): passed over quickly when it is missing. */
+  optional?: boolean;
+}
+
+// The walk goes screen by screen. Each screen ends with a `press` step that sends the user,
+// by their own tap, to the next one.
+const STEPS: Step[] = [
   {
+    path: "/",
     target: "today",
     title: "מותר להוציא היום",
     text: "המספר שלפיו פועלים: מה שנשאר החודש אחרי חיסכון וחשבונות קבועים, מחולק לימים שנותרו. העמודות למטה מראות כמה יצא בכל יום.",
   },
   {
+    path: "/",
     target: "quick-add",
     title: "רישום מהיר",
     text: "כותבים מה הוצאתם, למשל \"סופר 230\" או \"דלק 180 אתמול\", והבוט רושם ומשייך לקטגוריה.",
   },
+  { path: "/", target: "numbers", title: "החודש במבט אחד", text: "כמה נכנס, כמה יצא וכמה נשאר עד עכשיו." },
   {
-    target: "numbers",
-    title: "החודש במבט אחד",
-    text: "כמה נכנס, כמה יצא וכמה נשאר עד עכשיו.",
-  },
-  {
+    path: "/",
     target: "nav-transactions",
-    title: "הוצאות",
-    text: "כל מה שנרשם, לפי ימים. כאן מחפשים, מתקנים קטגוריה, עורכים ומוחקים.",
+    title: "עכשיו לחצו על \"הוצאות\"",
+    text: "שם נמצא כל מה שנרשם. לחצו על הכפתור המואר, וההדרכה תמשיך במסך שייפתח.",
+    press: true,
+  },
+
+  {
+    path: "/transactions",
+    target: "month-nav",
+    title: "מעבר בין חודשים",
+    text: "החיצים מעבירים לחודש הקודם או הבא. אותו סרגל מופיע גם בתקציב ובמגמות.",
   },
   {
+    path: "/transactions",
+    target: "tx-add",
+    title: "הוספה ידנית",
+    text: "להוסיף הוצאה או הכנסה חד־פעמית בלי הבוט: סכום, קטגוריה, תאריך ותיאור.",
+  },
+  {
+    path: "/transactions",
+    target: "tx-filter",
+    title: "חיפוש וסינון",
+    text: "מחפשים לפי תיאור או סכום, או מציגים רק קטגוריה אחת, רק הכנסות, או רק מה שעוד בלי קטגוריה.",
+  },
+  {
+    path: "/transactions",
+    target: "tx-list",
+    title: "הרשימה",
+    text: "ההוצאות מקובצות לפי ימים. לחיצה על שורה פותחת אותה לעריכה: סכום, קטגוריה, תאריך, \"שולם במזומן\" ומחיקה.",
+    optional: true,
+  },
+  {
+    path: "/transactions",
     target: "nav-chat",
-    title: "הבוט",
-    text: "השיחה המלאה: כמה הוצאות בהודעה אחת, ושאלות כמו \"כמה נשאר לנו החודש?\".",
+    title: "לחצו על הבוט",
+    text: "הכפתור העגול באמצע הוא הדרך המהירה לרשום. לחצו עליו כדי להמשיך.",
+    press: true,
+  },
+
+  {
+    path: "/chat",
+    target: "chat-input",
+    title: "כותבים כאן",
+    text: "אפשר כמה הוצאות בהודעה אחת (\"פיצה 60, קפה 14\"), הכנסה (\"קיבלתי בונוס 1500\"), או שאלה (\"כמה נשאר לנו החודש?\"). אם הבוט טעה, מופיע \"ביטול הרישום\".",
   },
   {
+    path: "/chat",
+    target: "chat-examples",
+    title: "דוגמאות",
+    text: "לחיצה על דוגמה ממלאת את השורה בלי לשלוח, כדי שלא תירשם הוצאה בטעות.",
+  },
+  {
+    path: "/chat",
     target: "nav-budget",
-    title: "תקציב",
-    text: "כמה תכננתם לכל קטגוריה מול מה שיצא בפועל. כאן גם משנים סכומים ומוסיפים קטגוריות.",
+    title: "לחצו על \"תקציב\"",
+    text: "שם קובעים כמה מתוכנן לכל קטגוריה. לחצו כדי להמשיך.",
+    press: true,
+  },
+
+  {
+    path: "/budget",
+    target: "budget-summary",
+    title: "הכנסות מול תקציב",
+    text: "כמה נכנס החודש, כמה תכננתם בסך הכול, וכמה כסף עוד לא קיבל תפקיד.",
   },
   {
+    path: "/budget",
+    target: "budget-group",
+    title: "הקטגוריות",
+    text: "שלוש קבוצות: חיסכון, חשבונות קבועים והוצאות משתנות. בכל שורה רואים כמה יצא מתוך מה שתוכנן, ולחיצה עליה פותחת עריכה של השם, הסכום והסוג.",
+  },
+  {
+    path: "/budget",
+    target: "budget-add",
+    title: "קטגוריה חדשה",
+    text: "מוסיפים קטגוריה משלכם, למשל \"מזומן\" או \"חיות מחמד\", עם סכום חודשי.",
+  },
+  {
+    path: "/budget",
     target: "nav-trends",
-    title: "מגמות",
-    text: "סיכום החודש, השוואה לחודשים קודמים, ולאן הלך הכי הרבה כסף.",
+    title: "לחצו על \"מגמות\"",
+    text: "שם רואים את התמונה לאורך זמן. לחצו כדי להמשיך.",
+    press: true,
+  },
+
+  {
+    path: "/trends",
+    target: "trends-summary",
+    title: "סיכום החודש",
+    text: "כמה נכנס, יצא ונחסך, השינוי מהחודש הקודם, ותחזית לסוף החודש בקצב הנוכחי.",
+    optional: true,
   },
   {
+    path: "/trends",
+    target: "trends-chart",
+    title: "חצי שנה אחורה",
+    text: "עמודה לכל חודש. ככל שיצטברו חודשים יופיעו כאן גם השוואה לחודש רגיל ובתי העסק שאליהם הלך הכי הרבה.",
+  },
+  {
+    path: "/trends",
+    target: "nav-home",
+    title: "חזרה לבית",
+    text: "לחצו על \"בית\". נשאר רק מסך אחד.",
+    press: true,
+  },
+
+  {
+    path: "/",
     target: "settings",
-    title: "הגדרות",
-    text: "הכנסות קבועות, קוד הזמנה לבן או בת הזוג, מפתח לבוט, ודף הסבר מפורט. את ההדרכה הזו אפשר להציג שוב משם.",
+    title: "ועכשיו ההגדרות",
+    text: "לחצו על \"הגדרות\" כדי לראות מה מגדירים שם.",
+    press: true,
+  },
+  {
+    path: "/settings",
+    target: "settings-incomes",
+    title: "הכנסות קבועות",
+    text: "משכורות וכל מה שנכנס כל חודש. מי שמסנכרן מהבנק לא צריך למלא: ההכנסות נקראות משם.",
+  },
+  {
+    path: "/settings",
+    target: "settings-invite",
+    title: "קוד הזמנה",
+    text: "בן או בת הזוג נרשמים עם מייל משלהם ומצטרפים עם הקוד הזה, ואז שניכם רואים ורושמים באותו תקציב.",
+  },
+  {
+    path: "/settings",
+    target: "settings-claude",
+    title: "מפתח לבוט",
+    text: "עם מפתח Claude משלכם הבוט מבין ניסוח חופשי ושאלות. בלי מפתח הוא מבין הודעות פשוטות כמו \"סופר 230\".",
+  },
+  {
+    path: "/settings",
+    target: "settings-help",
+    title: "הסבר והדרכה",
+    text: "כאן יש הסבר מפורט, צעד אחר צעד, וגם כפתור שמציג את ההדרכה הזו שוב. זהו, אפשר להתחיל.",
   },
 ];
 
@@ -57,22 +183,36 @@ function subscribe(onChange: () => void) {
 
 function isDone() {
   try {
-    return localStorage.getItem(STORAGE_KEY) === "1";
+    return localStorage.getItem(DONE_KEY) === "1";
   } catch {
     // Without storage the tour could never be dismissed for good, so it is not shown.
     return true;
   }
 }
 
-function setDone(done: boolean) {
+function remember(key: string, value: string | null) {
   try {
-    if (done) localStorage.setItem(STORAGE_KEY, "1");
-    else localStorage.removeItem(STORAGE_KEY);
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
   } catch {
     // Nothing to remember it in.
   }
+}
+
+function setDone(done: boolean) {
+  remember(DONE_KEY, done ? "1" : null);
+  remember(STEP_KEY, null);
   // The storage event only reaches other tabs; this one is told directly.
   window.dispatchEvent(new Event("storage"));
+}
+
+function savedStep() {
+  try {
+    const saved = Number(localStorage.getItem(STEP_KEY));
+    return Number.isInteger(saved) && saved >= 0 && saved < STEPS.length ? saved : 0;
+  } catch {
+    return 0;
+  }
 }
 
 interface Box {
@@ -83,51 +223,85 @@ interface Box {
 }
 
 const PADDING = 6;
+const DIM = "pointer-events-auto absolute bg-[rgb(16_14_40_/_0.72)]";
 
 /**
  * A first-visit walk through the app: the screen dims and one element at a time stays lit,
- * with a short explanation beside it. Shown once per device, on the home screen.
+ * with a short explanation beside it. To move between screens the user presses the lit
+ * button itself, and the walk carries on in the screen that opens. Shown once per device.
  */
 export function Tour() {
-  const pathname = usePathname();
   const done = useSyncExternalStore(subscribe, isDone, () => true);
   // Mounted only while it runs, so showing it again starts from the first step.
-  return !done && pathname === "/" ? <TourSteps /> : null;
+  return done ? null : <TourSteps />;
 }
 
 function TourSteps() {
-  const [index, setIndex] = useState(0);
-  const [box, setBox] = useState<Box | null>(null);
+  const pathname = usePathname();
+  const router = useRouter();
+  const [index, setIndex] = useState(savedStep);
+  const [box, setBox] = useState<{ target: string; rect: Box } | null>(null);
+
+  function go(to: number) {
+    if (to >= STEPS.length) {
+      setDone(true);
+      return;
+    }
+    remember(STEP_KEY, String(to));
+    setIndex(to);
+  }
+
+  // A `press` step is finished by the user's own tap, which changes the screen. Once the
+  // screen showing is the next step's and no longer this one's, the walk has moved on.
+  const next = STEPS[index + 1];
+  if (STEPS[index].press && next && STEPS[index].path !== pathname && next.path === pathname) {
+    go(index + 1);
+  }
+
   const step = STEPS[index];
+  const here = step.path === pathname;
 
   useEffect(() => {
-    let frame = 0;
+    if (!here) return;
+    // Timers, not animation frames: a tab in the background gets no frames at all, and the
+    // walk would silently stop there.
+    let timer = 0;
+    let tries = 0;
+    let scrolled = false;
     const measure = () => {
-      const element = document.querySelector(`[data-tour="${step.target}"]`);
+      // Screens visited earlier stay in the page, hidden, with their own marked elements;
+      // the one wanted is the one that is actually laid out.
+      const element = [...document.querySelectorAll(`[data-tour="${step.target}"]`)].find(
+        (candidate) => candidate.getClientRects().length > 0,
+      );
       if (!element) {
-        // The element is not on this screen (a card that is only shown sometimes): move on.
-        if (index < STEPS.length - 1) setIndex(index + 1);
-        else setDone(true);
+        // The screen may still be loading. An optional element gets a moment, the rest get longer.
+        tries += 1;
+        clearTimeout(timer);
+        if (tries < (step.optional ? 5 : 25)) timer = window.setTimeout(measure, 200);
+        else go(index + 1);
+        return;
+      }
+      if (!scrolled) {
+        scrolled = true;
+        element.scrollIntoView({ block: "center" });
+        // Measured a moment later, once the scroll has moved the element.
+        clearTimeout(timer);
+        timer = window.setTimeout(measure, 60);
         return;
       }
       const rect = element.getBoundingClientRect();
-      setBox({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+      setBox({ target: step.target, rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height } });
     };
-    const start = () => {
-      document.querySelector(`[data-tour="${step.target}"]`)?.scrollIntoView({ block: "center" });
-      // Measured on the next frame, once the scroll has moved the element.
-      frame = requestAnimationFrame(measure);
-    };
-    const first = requestAnimationFrame(start);
+    timer = window.setTimeout(measure, 0);
     window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("scroll", measure, { passive: true, capture: true });
     return () => {
-      cancelAnimationFrame(first);
-      cancelAnimationFrame(frame);
+      clearTimeout(timer);
       window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure);
+      window.removeEventListener("scroll", measure, { capture: true });
     };
-  }, [index, step.target]);
+  }, [here, index, step.target, step.optional]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -137,56 +311,98 @@ function TourSteps() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!box) return null;
+  const counter = (
+    <p className="text-sm font-semibold text-muted">
+      <span className="num">{index + 1}</span> מתוך <span className="num">{STEPS.length}</span>
+    </p>
+  );
+  const skip = (
+    <button type="button" className="text-sm font-semibold text-muted underline" onClick={() => setDone(true)}>
+      דילוג
+    </button>
+  );
+  const card =
+    "pointer-events-auto mx-auto max-w-sm space-y-3 rounded-3xl border border-card-line bg-bg p-4 text-ink shadow-card";
 
+  // The user wandered to another screen: offer the way back instead of pointing at nothing.
+  if (!here) {
+    return (
+      <div className="pointer-events-none fixed inset-x-4 bottom-28 z-50" role="dialog" aria-label="הדרכה באפליקציה">
+        <div className={card}>
+          {counter}
+          <p>ההדרכה ממשיכה במסך אחר.</p>
+          <div className="flex items-center gap-3">
+            {skip}
+            <span className="flex-1" />
+            <button type="button" className="btn min-h-0 px-4 py-2 text-sm" onClick={() => router.push(step.path)}>
+              להמשיך בהדרכה
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Not measured yet (the screen is still loading), or still showing the previous step's place.
+  if (!box || box.target !== step.target) return null;
+
+  const { rect } = box;
+  const hole = {
+    top: rect.top - PADDING,
+    left: rect.left - PADDING,
+    width: rect.width + PADDING * 2,
+    height: rect.height + PADDING * 2,
+  };
   const last = index === STEPS.length - 1;
   // The explanation goes on whichever side of the element has more room.
-  const below = box.top + box.height / 2 < window.innerHeight / 2;
+  const below = rect.top + rect.height / 2 < window.innerHeight / 2;
 
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="הדרכה באפליקציה">
-      {/* Catches taps, so nothing underneath is pressed by accident during the tour. */}
-      <div className="absolute inset-0" />
-      {/* The lit area: a hole whose enormous shadow is what dims the rest of the screen. */}
+    <div
+      className="pointer-events-none fixed inset-0 z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-label="הדרכה באפליקציה"
+    >
+      {/* Four dim panels around the lit element. They also catch taps, so nothing else is
+          pressed by accident; the gap between them is the element itself. */}
+      <div className={`inset-x-0 top-0 ${DIM}`} style={{ height: Math.max(hole.top, 0) }} />
+      <div className={`inset-x-0 bottom-0 ${DIM}`} style={{ top: hole.top + hole.height }} />
+      <div className={`left-0 ${DIM}`} style={{ top: hole.top, height: hole.height, width: Math.max(hole.left, 0) }} />
+      <div className={`right-0 ${DIM}`} style={{ top: hole.top, height: hole.height, left: hole.left + hole.width }} />
+      {/* Only a `press` step lets the tap through to the element. */}
+      {!step.press && <div className="pointer-events-auto absolute" style={hole} />}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute rounded-3xl shadow-[0_0_0_9999px_rgb(16_14_40_/_0.72)] ring-2 ring-white/80 transition-all duration-200 motion-reduce:transition-none"
-        style={{
-          top: box.top - PADDING,
-          left: box.left - PADDING,
-          width: box.width + PADDING * 2,
-          height: box.height + PADDING * 2,
-        }}
+        className={`absolute rounded-2xl ring-white ${step.press ? "animate-pulse ring-4" : "ring-2"}`}
+        style={hole}
       />
+
       <div
-        className="absolute inset-x-4 mx-auto max-w-sm space-y-3 rounded-3xl border border-card-line bg-bg p-4 text-ink shadow-card"
-        style={below ? { top: box.top + box.height + PADDING + 14 } : { bottom: window.innerHeight - box.top + PADDING + 14 }}
+        className="absolute inset-x-4"
+        style={below ? { top: hole.top + hole.height + 14 } : { bottom: window.innerHeight - hole.top + 14 }}
       >
-        <div aria-live="polite" className="space-y-1">
-          <p className="text-sm font-semibold text-muted">
-            <span className="num">{index + 1}</span> מתוך <span className="num">{STEPS.length}</span>
-          </p>
-          <h2 className="text-lg font-bold">{step.title}</h2>
-          <p className="leading-relaxed">{step.text}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button type="button" className="text-sm font-semibold text-muted underline" onClick={() => setDone(true)}>
-            דילוג
-          </button>
-          <span className="flex-1" />
-          {index > 0 && (
-            <button type="button" className="btn btn-quiet min-h-0 px-3.5 py-2 text-sm" onClick={() => setIndex(index - 1)}>
-              הקודם
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn min-h-0 px-4 py-2 text-sm"
-            autoFocus
-            onClick={() => (last ? setDone(true) : setIndex(index + 1))}
-          >
-            {last ? "סיום" : "הבא"}
-          </button>
+        <div className={card}>
+          <div aria-live="polite" className="space-y-1">
+            {counter}
+            <h2 className="text-lg font-bold">{step.title}</h2>
+            <p className="leading-relaxed">{step.text}</p>
+            {step.press && <p className="pt-1 font-bold text-accent">ההדרכה מחכה ללחיצה שלכם על הכפתור המואר.</p>}
+          </div>
+          <div className="flex items-center gap-3">
+            {skip}
+            <span className="flex-1" />
+            {index > 0 && !STEPS[index - 1].press && (
+              <button type="button" className="btn btn-quiet min-h-0 px-3.5 py-2 text-sm" onClick={() => go(index - 1)}>
+                הקודם
+              </button>
+            )}
+            {!step.press && (
+              <button type="button" className="btn min-h-0 px-4 py-2 text-sm" onClick={() => go(index + 1)}>
+                {last ? "סיום" : "הבא"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

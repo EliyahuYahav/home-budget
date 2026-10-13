@@ -70,28 +70,26 @@ export default async function HomePage() {
 
       <QuickAdd />
 
-      <div data-tour="numbers">
-        <Card className="grid grid-cols-3 !p-0 text-center">
-          <div className="p-3">
-            <p className="text-sm text-muted">{summary.incomeIsEstimated ? "הכנסות (הערכה)" : "הכנסות"}</p>
-            <p className="font-display text-3xl font-bold">
-              <Money amount={summary.income} />
-            </p>
-          </div>
-          <div className="border-s border-line p-3">
-            <p className="text-sm text-muted">הוצאות</p>
-            <p className="font-display text-3xl font-bold">
-              <Money amount={summary.spent} />
-            </p>
-          </div>
-          <div className="border-s border-line p-3">
-            <p className="text-sm text-muted">נשאר</p>
-            <p className={`font-display text-3xl font-bold ${summary.remaining < 0 ? "text-danger" : ""}`}>
-              <Money amount={summary.remaining} />
-            </p>
-          </div>
-        </Card>
-      </div>
+      <Card tour="numbers" className="grid grid-cols-3 !p-0 text-center">
+        <div className="p-3">
+          <p className="text-sm text-muted">{summary.incomeIsEstimated ? "הכנסות (הערכה)" : "הכנסות"}</p>
+          <p className="font-display text-3xl font-bold">
+            <Money amount={summary.income} />
+          </p>
+        </div>
+        <div className="border-s border-line p-3">
+          <p className="text-sm text-muted">הוצאות</p>
+          <p className="font-display text-3xl font-bold">
+            <Money amount={summary.spent} />
+          </p>
+        </div>
+        <div className="border-s border-line p-3">
+          <p className="text-sm text-muted">נשאר</p>
+          <p className={`font-display text-3xl font-bold ${summary.remaining < 0 ? "text-danger" : ""}`}>
+            <Money amount={summary.remaining} />
+          </p>
+        </div>
+      </Card>
 
       {summary.incomeIsEstimated && (
         <p className="rounded-3xl bg-warn-soft p-4 text-[0.95rem]">

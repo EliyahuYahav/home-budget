@@ -29,7 +29,7 @@ export default async function SettingsPage() {
     <>
       <PageTitle>הגדרות</PageTitle>
 
-      <Card className="space-y-3">
+      <Card tour="settings-incomes" className="space-y-3">
         <div className="flex items-baseline justify-between">
           <SectionTitle>הכנסות קבועות</SectionTitle>
           <Money amount={totalIncome} className="font-bold" />
@@ -73,7 +73,7 @@ export default async function SettingsPage() {
       <Card className="space-y-3">
         <SectionTitle>{ctx.household.name}</SectionTitle>
         <p className="text-muted">חברים: {members.map((m) => m.display_name).join(", ")}</p>
-        <div className="space-y-2 rounded-2xl bg-accent-soft p-4">
+        <div className="space-y-2 rounded-2xl bg-accent-soft p-4" data-tour="settings-invite">
           <p className="text-sm font-semibold">קוד הזמנה לבן או בת הזוג</p>
           <CopyCode code={ctx.household.invite_code} />
           <p className="text-sm text-muted">
@@ -82,7 +82,7 @@ export default async function SettingsPage() {
         </div>
       </Card>
 
-      <Card className="space-y-3">
+      <Card tour="settings-claude" className="space-y-3">
         <SectionTitle>הבוט ו־Claude</SectionTitle>
         <p className="text-muted">
           {claudeKey.apiKey ? (
@@ -126,7 +126,7 @@ export default async function SettingsPage() {
         </form>
       </Card>
 
-      <Link href="/help" className="panel flex items-center justify-between p-4 font-bold">
+      <Link href="/help" data-tour="settings-help" className="panel flex items-center justify-between p-4 font-bold">
         <span>הסבר והדרכה</span>
         <ChevronEnd className="text-muted" />
       </Link>

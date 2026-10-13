@@ -94,7 +94,7 @@ function Group({ title, note, rows }: { title: string; note: string; rows: Categ
   const planned = rows.reduce((sum, r) => sum + r.category.monthly_budget, 0);
   const actual = rows.reduce((sum, r) => sum + r.spent, 0);
   return (
-    <section className="space-y-2">
+    <section className="space-y-2" data-tour="budget-group">
       <div className="px-1">
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="text-lg font-bold">{title}</h2>
@@ -137,7 +137,7 @@ export default async function BudgetPage({ searchParams }: PageProps<"/budget">)
       <PageTitle>תקציב מול ביצוע</PageTitle>
       <MonthNav month={month} basePath="/budget" />
 
-      <Card className="space-y-1.5">
+      <Card tour="budget-summary" className="space-y-1.5">
         <div className="flex justify-between">
           <span>הכנסות החודש{summary.incomeIsEstimated ? " (הערכה)" : ""}</span>
           <Money amount={summary.income} className="font-bold" />
@@ -174,7 +174,7 @@ export default async function BudgetPage({ searchParams }: PageProps<"/budget">)
       />
       <Group title="הוצאות משתנות" note="לחיצה על שורה פותחת עריכה." rows={flexible} />
 
-      <details className="panel">
+      <details className="panel" data-tour="budget-add">
         <summary className="flex cursor-pointer items-center gap-3 p-4 font-bold">
           <span className="flex size-8 items-center justify-center rounded-full bg-accent-soft text-accent">
             <PlusIcon className="size-5" />
