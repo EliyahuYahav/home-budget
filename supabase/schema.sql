@@ -129,6 +129,16 @@ create table if not exists public.household_secrets (
   updated_at      timestamptz not null default now()
 );
 
+-- Payers whose income, when it reaches the bank in the last days of a month, is the money
+-- for the month that follows (a salary paid on the 31st in some months and the 1st in others).
+-- `payer` is a piece of the bank's description; the sync records such an income on the 1st.
+create table if not exists public.next_month_incomes (
+  household_id uuid not null references public.households (id) on delete cascade,
+  payer        text not null check (length(trim(payer)) between 2 and 100),
+  created_at   timestamptz not null default now(),
+  primary key (household_id, payer)
+);
+
 create index if not exists bank_sync_runs_household_idx
   on public.bank_sync_runs (household_id, created_at desc);
 
@@ -165,13 +175,15 @@ alter table public.chat_messages     enable row level security;
 alter table public.bank_sync_settings enable row level security;
 alter table public.bank_sync_runs     enable row level security;
 alter table public.household_secrets  enable row level security;
+alter table public.next_month_incomes enable row level security;
 
 -- Nothing here is for visitors who are not signed in. Row level security already returns
 -- them nothing; taking the table privileges away as well means a policy mistake alone
 -- cannot expose a table.
 revoke all on public.households, public.household_members, public.categories,
   public.recurring_incomes, public.transactions, public.chat_messages,
-  public.bank_sync_settings, public.bank_sync_runs, public.household_secrets
+  public.bank_sync_settings, public.bank_sync_runs, public.household_secrets,
+  public.next_month_incomes
   from anon;
 
 -- A policy decides which rows may be updated, not which columns. Without these, a member
@@ -226,6 +238,12 @@ create policy chat_messages_all on public.chat_messages
 
 drop policy if exists bank_sync_settings_all on public.bank_sync_settings;
 create policy bank_sync_settings_all on public.bank_sync_settings
+  for all to authenticated
+  using (public.is_household_member(household_id))
+  with check (public.is_household_member(household_id));
+
+drop policy if exists next_month_incomes_all on public.next_month_incomes;
+create policy next_month_incomes_all on public.next_month_incomes
   for all to authenticated
   using (public.is_household_member(household_id))
   with check (public.is_household_member(household_id));

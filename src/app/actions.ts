@@ -235,6 +235,29 @@ export async function addRecurringIncome(form: FormData) {
   revalidateApp();
 }
 
+/** Marks a payer (a piece of the bank's description) as paying next month's income. */
+export async function addNextMonthPayer(form: FormData) {
+  const ctx = await requireContext();
+  const payer = text(form, "payer").slice(0, 100);
+  if (payer.length < 2) return;
+  const { error } = await ctx.supabase
+    .from("next_month_incomes")
+    .upsert({ household_id: ctx.household.id, payer }, { onConflict: "household_id,payer", ignoreDuplicates: true });
+  if (error) throw new Error(error.message);
+  revalidateApp();
+}
+
+export async function removeNextMonthPayer(form: FormData) {
+  const ctx = await requireContext();
+  const { error } = await ctx.supabase
+    .from("next_month_incomes")
+    .delete()
+    .eq("household_id", ctx.household.id)
+    .eq("payer", text(form, "payer"));
+  if (error) throw new Error(error.message);
+  revalidateApp();
+}
+
 export async function deleteRecurringIncome(form: FormData) {
   const ctx = await requireContext();
   const { error } = await ctx.supabase

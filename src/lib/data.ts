@@ -74,6 +74,33 @@ export async function getRecurringIncomes(ctx: AppContext): Promise<RecurringInc
   return (data ?? []).map((i) => ({ ...i, amount: num(i.amount) }));
 }
 
+/** Payers whose end-of-month income is counted for the next month. Empty on a database without the table yet. */
+export async function getNextMonthPayers(ctx: AppContext): Promise<string[]> {
+  const { data, error } = await ctx.supabase
+    .from("next_month_incomes")
+    .select("payer")
+    .eq("household_id", ctx.household.id)
+    .order("created_at");
+  return error ? [] : (data ?? []).map((row) => row.payer as string);
+}
+
+/** Who paid into the bank account lately, by description, most recent first: the candidates to choose a payer from. */
+export async function getRecentBankPayers(ctx: AppContext, since: string): Promise<string[]> {
+  const { data, error } = await ctx.supabase
+    .from("transactions")
+    .select("description")
+    .eq("household_id", ctx.household.id)
+    .eq("type", "income")
+    .eq("source", "bank")
+    .gte("occurred_on", since)
+    .order("occurred_on", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  // An income already counted for the next month carries a note of the day it arrived.
+  const names = (data ?? []).map((row) => String(row.description).replace(/ \(נכנס ב־[\d.]+\)$/, "").trim());
+  return [...new Set(names.filter(Boolean))].slice(0, 8);
+}
+
 export async function getMembers(ctx: AppContext): Promise<Member[]> {
   const { data, error } = await ctx.supabase
     .from("household_members")

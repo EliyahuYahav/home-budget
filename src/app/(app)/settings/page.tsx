@@ -1,7 +1,9 @@
 import Link from "next/link";
 import {
+  addNextMonthPayer,
   addRecurringIncome,
   deleteRecurringIncome,
+  removeNextMonthPayer,
   signOut,
   updateDisplayName,
 } from "@/app/actions";
@@ -10,7 +12,8 @@ import { ChevronEnd } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { VersionRow } from "@/components/version-row";
 import { Card, Money, PageTitle, SectionTitle } from "@/components/ui";
-import { getMembers, getRecurringIncomes, requireContext } from "@/lib/data";
+import { getMembers, getNextMonthPayers, getRecentBankPayers, getRecurringIncomes, requireContext } from "@/lib/data";
+import { shiftDate, todayISO } from "@/lib/dates";
 import { ClaudeKeyForm } from "@/components/claude-key-form";
 import { resolveClaudeKey } from "@/lib/claude-key";
 import { isSecretBoxConfigured } from "@/lib/secret-box";
@@ -18,11 +21,16 @@ import packageInfo from "../../../../package.json";
 
 export default async function SettingsPage() {
   const ctx = await requireContext();
-  const [incomes, members, claudeKey] = await Promise.all([
+  const [incomes, members, claudeKey, nextMonthPayers, recentPayers] = await Promise.all([
     getRecurringIncomes(ctx),
     getMembers(ctx),
     resolveClaudeKey(ctx),
+    getNextMonthPayers(ctx),
+    getRecentBankPayers(ctx, shiftDate(todayISO(), -120)),
   ]);
+  const payerSuggestions = recentPayers.filter(
+    (name) => !nextMonthPayers.some((payer) => name.toLowerCase().includes(payer.toLowerCase())),
+  );
   const totalIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
 
   return (
@@ -68,6 +76,61 @@ export default async function SettingsPage() {
             הוספת הכנסה
           </SubmitButton>
         </form>
+      </Card>
+
+      <Card className="space-y-3">
+        <SectionTitle>משכורת שנכנסת בסוף החודש</SectionTitle>
+        <p className="text-sm text-muted">
+          יש משכורות שנכנסות לפעמים ב־31 ולפעמים ב־1, והן הכסף של החודש שמתחיל. כשמסמנים כאן ממי המשכורת,
+          הסנכרון מהבנק רושם אותה על ה־1 בחודש הבא אם היא נכנסה בשלושת הימים האחרונים של החודש. הכנסות
+          ממקורות אחרים נשארות בתאריך שלהן.
+        </p>
+        {nextMonthPayers.length > 0 && (
+          <ul className="divide-y divide-line">
+            {nextMonthPayers.map((payer) => (
+              <li key={payer} className="flex items-center justify-between gap-3 py-2.5">
+                <span className="min-w-0 truncate">{payer}</span>
+                <form action={removeNextMonthPayer}>
+                  <input type="hidden" name="payer" value={payer} />
+                  <SubmitButton className="text-sm font-semibold text-danger underline" pendingLabel="מסיר…">
+                    הסרה
+                  </SubmitButton>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        {payerSuggestions.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">מי שהכניס כסף לחשבון לאחרונה. לחיצה מסמנת:</p>
+            <div className="flex flex-wrap gap-2">
+              {payerSuggestions.map((name) => (
+                <form key={name} action={addNextMonthPayer}>
+                  <input type="hidden" name="payer" value={name} />
+                  <SubmitButton
+                    className="max-w-full truncate rounded-full border border-line bg-card px-3 py-1.5 text-sm font-semibold"
+                    pendingLabel="מסמן…"
+                  >
+                    + {name}
+                  </SubmitButton>
+                </form>
+              ))}
+            </div>
+          </div>
+        )}
+        <form action={addNextMonthPayer} className="flex items-end gap-3">
+          <label className="min-w-0 flex-1 space-y-1">
+            <span className="text-sm font-semibold">או חלק מהתיאור, כפי שהוא מופיע בבנק</span>
+            <input className="field" name="payer" placeholder="למשל: משרד הביטחון" minLength={2} maxLength={100} required />
+          </label>
+          <SubmitButton className="btn btn-quiet" pendingLabel="מוסיף…">
+            הוספה
+          </SubmitButton>
+        </form>
+        <p className="text-sm text-muted">
+          משכורות שכבר נרשמו יעברו לחודש הנכון בסנכרון הבא שקורא אותן. אם הסוכן רץ, הוא ייקח את השינוי
+          בריצה הבאה.
+        </p>
       </Card>
 
       <Card className="space-y-3">

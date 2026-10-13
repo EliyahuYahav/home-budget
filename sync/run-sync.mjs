@@ -199,10 +199,18 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     }
   }
 
+  // The payers whose end-of-month income the household counts for the next month (set in the
+  // app's settings). A database without the table yet simply has none.
+  const { data: payerRows } = await supabase.from("next_month_incomes").select("payer").eq("household_id", householdId);
+  const nextMonthPayers = (payerRows ?? []).map((row) => row.payer);
+  if (nextMonthPayers.length > 0) {
+    log(`Income from these payers, paid in the last days of a month, counts for the next month: ${nextMonthPayers.join("; ")}.`);
+  }
+
   const { candidates, accounts, skipped } = toCandidates(scraped, {
     cards: sources.filter((source) => source.kind === "card").map((source) => source.company),
     importIncome: process.env.IMPORT_INCOME !== "off",
-    lateIncomeDays: process.env.LATE_INCOME_DAYS === undefined || process.env.LATE_INCOME_DAYS === "" ? 2 : Number(process.env.LATE_INCOME_DAYS),
+    nextMonthPayers,
   });
 
   // Hand-written rows can sit a couple of days before the bank's date.

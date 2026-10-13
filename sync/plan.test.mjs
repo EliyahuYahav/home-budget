@@ -109,29 +109,39 @@ describe("toCandidates", () => {
     expect(skipped.credits).toBe(0);
   });
 
-  it("counts a salary paid at the very end of a month for the next month", () => {
+  it("counts a chosen payer's salary at the end of a month for the next month, and nobody else's", () => {
     const bank = source(
       [
         // 2026-10-30T22:00Z is midnight on the 31st in Israel (winter time).
-        txn({ identifier: 21, date: "2026-10-30T22:00:00.000Z", chargedAmount: 9500, description: "משכורת" }),
-        txn({ identifier: 22, date: "2026-10-30T22:00:00.000Z", chargedAmount: -80, description: "מכולת" }),
-        txn({ identifier: 23, date: "2026-10-19T21:00:00.000Z", chargedAmount: 300, description: "החזר" }),
+        txn({ identifier: 21, date: "2026-10-30T22:00:00.000Z", chargedAmount: 9500, description: "משרד הביטחון משכורת" }),
+        txn({ identifier: 22, date: "2026-10-30T22:00:00.000Z", chargedAmount: 400, description: "העברה מדני" }),
+        txn({ identifier: 23, date: "2026-10-30T22:00:00.000Z", chargedAmount: -80, description: "משרד הביטחון" }),
+        txn({ identifier: 24, date: "2026-10-19T21:00:00.000Z", chargedAmount: 9500, description: "משרד הביטחון משכורת" }),
       ],
       { company: "discount", kind: "bank" },
     );
-    const { candidates } = toCandidates([bank]);
+    const { candidates } = toCandidates([bank], { nextMonthPayers: ["משרד הביטחון"] });
     expect(candidates.map((c) => [c.type, c.date, c.bankDate, c.description, c.externalId])).toEqual([
-      ["income", "2026-11-01", "2026-10-31", "משכורת (נכנס ב־31.10)", "discount:1234:21"],
-      // An expense on the same day stays where it is, and so does income in the middle of the month.
-      ["expense", "2026-10-31", undefined, "מכולת", "discount:1234:22"],
-      ["income", "2026-10-20", undefined, "החזר", "discount:1234:23"],
+      ["income", "2026-11-01", "2026-10-31", "משרד הביטחון משכורת (נכנס ב־31.10)", "discount:1234:21"],
+      // Another income on the very same day stays where it is.
+      ["income", "2026-10-31", undefined, "העברה מדני", "discount:1234:22"],
+      // So does a payment to the same name, and the same salary in the middle of a month.
+      ["expense", "2026-10-31", undefined, "משרד הביטחון", "discount:1234:23"],
+      ["income", "2026-10-20", undefined, "משרד הביטחון משכורת", "discount:1234:24"],
     ]);
-    expect(toCandidates([bank], { lateIncomeDays: 0 }).candidates[0].date).toBe("2026-10-31");
+  });
+
+  it("moves no income when the household chose no payer", () => {
+    const bank = source(
+      [txn({ identifier: 21, date: "2026-10-30T22:00:00.000Z", chargedAmount: 9500, description: "משכורת" })],
+      { company: "discount", kind: "bank" },
+    );
+    expect(toCandidates([bank]).candidates[0]).toMatchObject({ date: "2026-10-31", description: "משכורת" });
   });
 
   it("leaves a refund on a card on the day it happened", () => {
     const card = source([txn({ identifier: 31, date: "2026-10-30T22:00:00.000Z", chargedAmount: 50 })]);
-    expect(toCandidates([card]).candidates[0].date).toBe("2026-10-31");
+    expect(toCandidates([card], { nextMonthPayers: ["שופרסל"] }).candidates[0].date).toBe("2026-10-31");
   });
 
   it("leaves out both sides of a transfer between the household's own accounts", () => {

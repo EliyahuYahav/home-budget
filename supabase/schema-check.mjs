@@ -156,6 +156,18 @@ expect("other household cannot plant a key for B", !r.ok, show(r));
 r = await as("anon", "select * from public.household_secrets");
 expect("signed-out visitor cannot read household_secrets", !r.ok, show(r));
 
+// --- payers counted for the next month
+r = await as("B", "insert into public.next_month_incomes (household_id, payer) values ($1, 'משרד הביטחון')", [hidB]);
+expect("a household can mark a payer as next month's income", r.ok, show(r));
+r = await as("A", "select * from public.next_month_incomes where household_id = $1", [hidB]);
+expect("other household cannot read B's payers", r.ok && r.rows.length === 0, show(r));
+r = await as("A", "insert into public.next_month_incomes (household_id, payer) values ($1, 'x payer')", [hidB]);
+expect("other household cannot add a payer for B", !r.ok, show(r));
+r = await as("A", "delete from public.next_month_incomes where household_id = $1", [hidB]);
+expect("other household cannot remove B's payers", blocked(r), show(r));
+r = await as("B", "insert into public.next_month_incomes (household_id, payer) values ($1, ' ')", [hidB]);
+expect("an empty payer is refused", !r.ok, show(r));
+
 // --- reset: a household can clear its own rows, and only its own
 r = await as("A", "delete from public.transactions where household_id = $1", [hidA]);
 expect("a household can delete all of its own transactions", r.ok && r.affected === 3, show(r));

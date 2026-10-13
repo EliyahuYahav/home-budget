@@ -33,9 +33,9 @@ export function israelDate(iso) {
 const cents = (amount) => Math.round(amount * 100);
 
 /**
- * A salary paid on the last day or two of a month is the money for the month that follows.
- * For an income dated within the last `days` days of its month, returns the 1st of the next
- * month; otherwise null.
+ * A salary paid on the last days of a month is the money for the month that follows.
+ * For a date within the last `days` days of its month, returns the 1st of the next month;
+ * otherwise null. Which incomes this applies to is the household's choice (toCandidates).
  */
 export function countedNextMonth(date, days) {
   if (!(days > 0)) return null;
@@ -97,16 +97,20 @@ function ownTransfers(sources) {
  * money coming in.
  *
  * @param {ScrapedSource[]} sources
- * @param {{ cards?: string[], importIncome?: boolean, lateIncomeDays?: number }} [options] `cards` are the card
- *   companies set up for reading, whether or not this run reached them. An income in a bank
- *   account dated within the last `lateIncomeDays` days of a month is counted on the 1st of the next.
+ * @param {{ cards?: string[], importIncome?: boolean, nextMonthPayers?: string[], lateIncomeDays?: number }} [options]
+ *   `cards` are the card companies set up for reading, whether or not this run reached them.
+ *   `nextMonthPayers` are pieces of text the household chose (the army, an employer): an income
+ *   in a bank account whose description contains one, dated within the last `lateIncomeDays`
+ *   days of a month, is counted on the 1st of the next. Any other income keeps its date.
  * @returns {{ candidates: Candidate[], accounts: AccountCount[], skipped: { pending: number, credits: number, cardCharges: string[], ownTransfers: string[] } }}
  *   `accounts` says, for each account read, how many lines there were and what became of them.
  */
 export function toCandidates(sources, options = {}) {
   const cards = options.cards ?? sources.filter((s) => s.kind === "card").map((s) => s.company);
   const importIncome = options.importIncome ?? true;
-  const lateIncomeDays = options.lateIncomeDays ?? 2;
+  const lateIncomeDays = options.lateIncomeDays ?? 3;
+  const nextMonthPayers = (options.nextMonthPayers ?? []).map((payer) => payer.trim().toLowerCase()).filter(Boolean);
+  const paidForNextMonth = (name) => nextMonthPayers.some((payer) => name.toLowerCase().includes(payer));
   const candidates = [];
   const counts = [];
   const transfers = ownTransfers(sources);
@@ -174,7 +178,8 @@ export function toCandidates(sources, options = {}) {
           ? ` (תשלום ${txn.installments.number} מתוך ${txn.installments.total})`
           : "";
         // The id above is built from the bank's own date, so it stays the same either way.
-        const countedOn = type === "income" && kind === "bank" ? countedNextMonth(date, lateIncomeDays) : null;
+        const countedOn =
+          type === "income" && kind === "bank" && paidForNextMonth(name) ? countedNextMonth(date, lateIncomeDays) : null;
         candidates.push({
           externalId: key,
           company,
