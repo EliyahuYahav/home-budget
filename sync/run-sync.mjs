@@ -58,6 +58,17 @@ export function defaultSince() {
   return israelDate(new Date(Date.now() - DEFAULT_DAYS_BACK * 86_400_000).toISOString());
 }
 
+/** The date `months` calendar months before today; one month is the usual 30 days. */
+export function sinceMonthsBack(months) {
+  if (!(months > 1)) return defaultSince();
+  const date = new Date();
+  date.setMonth(date.getMonth() - Math.min(months, 12));
+  return israelDate(date.toISOString());
+}
+
+const PAGE = 1000;
+const WRITE_BATCH = 200;
+
 /**
  * Checks login details given as { id: { field: value } } and returns the sources to read.
  * A login with every field empty is simply not used.
@@ -157,18 +168,26 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
 
   // Hand-written rows can sit a couple of days before the bank's date.
   const from = israelDate(new Date(Date.parse(since) - (MATCH_DAYS + 1) * 86_400_000).toISOString());
-  const { data: existing, error: existingError } = await supabase
-    .from("transactions")
-    .select("id, external_id, type, amount, occurred_on")
-    .eq("household_id", householdId)
-    .gte("occurred_on", from);
-  if (existingError) {
-    if (/external_id/.test(existingError.message)) {
-      throw new SetupError(
-        "The database is missing the bank columns. Run supabase/schema.sql again in the Supabase SQL Editor.",
-      );
+  // The API returns at most a thousand rows at a time, and half a year can hold more.
+  const existing = [];
+  for (let page = 0; ; page += 1) {
+    const { data, error: existingError } = await supabase
+      .from("transactions")
+      .select("id, external_id, type, amount, occurred_on")
+      .eq("household_id", householdId)
+      .gte("occurred_on", from)
+      .order("id")
+      .range(page * PAGE, (page + 1) * PAGE - 1);
+    if (existingError) {
+      if (/external_id/.test(existingError.message)) {
+        throw new SetupError(
+          "The database is missing the bank columns. Run supabase/schema.sql again in the Supabase SQL Editor.",
+        );
+      }
+      throw new Error(existingError.message);
     }
-    throw new Error(existingError.message);
+    existing.push(...data);
+    if (data.length < PAGE) break;
   }
 
   const plan = planImport(
@@ -201,20 +220,20 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
   }
 
   if (!dryRun) {
-    if (plan.inserts.length > 0) {
-      const { error } = await supabase.from("transactions").insert(
-        plan.inserts.map((candidate, i) => ({
-          household_id: householdId,
-          type: candidate.type,
-          amount: candidate.amount,
-          category_id: categoryIds[i],
-          description: candidate.description,
-          occurred_on: candidate.date,
-          source: "bank",
-          external_id: candidate.externalId,
-        })),
-      );
-      if (error) throw new Error(`Saving the new rows failed: ${error.message}`);
+    const rows = plan.inserts.map((candidate, i) => ({
+      household_id: householdId,
+      type: candidate.type,
+      amount: candidate.amount,
+      category_id: categoryIds[i],
+      description: candidate.description,
+      occurred_on: candidate.date,
+      source: "bank",
+      external_id: candidate.externalId,
+    }));
+    for (let start = 0; start < rows.length; start += WRITE_BATCH) {
+      const { error } = await supabase.from("transactions").insert(rows.slice(start, start + WRITE_BATCH));
+      // Rows saved before a failure stay; the next run recognises them and adds only the rest.
+      if (error) throw new Error(`Saving the new rows failed after ${start} of ${rows.length}: ${error.message}`);
     }
     for (const { id, candidate } of plan.links) {
       const { error } = await supabase

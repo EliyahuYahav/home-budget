@@ -139,6 +139,20 @@ r = await as("A", "update public.bank_sync_settings set credentials = 'sealed' w
 expect("the website can save sealed bank details", r.ok && r.affected === 1, show(r));
 r = await as("A", "insert into public.bank_sync_runs (household_id, dry_run) values ($1, true) returning status", [hidA]);
 expect("the website can request a sync", r.ok && r.rows[0].status === "queued", show(r));
+r = await as("A", "insert into public.bank_sync_runs (household_id, dry_run, months_back) values ($1, true, 6) returning months_back", [hidA]);
+expect("a sync can be asked to read half a year back", r.ok && r.rows[0].months_back === 6, show(r));
+r = await as("A", "insert into public.bank_sync_runs (household_id, months_back) values ($1, 60)", [hidA]);
+expect("a sync cannot be asked for more than a year", !r.ok, show(r));
+
+// --- reset: a household can clear its own rows, and only its own
+r = await as("A", "delete from public.transactions where household_id = $1", [hidA]);
+expect("a household can delete all of its own transactions", r.ok && r.affected === 3, show(r));
+await db.exec("reset role");
+r = await db.query("select count(*)::int as n from public.transactions where household_id = $1", [hidB]);
+expect("resetting one household leaves the other's rows", r.rows[0].n === 1, JSON.stringify(r.rows));
+r = await db.query("select count(*)::int as n from public.categories where household_id = $1", [hidA]);
+expect("a reset keeps the household's categories", r.rows[0].n === 29, JSON.stringify(r.rows));
+
 r = await as("A", "select count(*)::int as n from public.categories where household_id = $1", [hidA]);
 expect("a new household starts with its categories", r.ok && r.rows[0].n === 29, show(r));
 

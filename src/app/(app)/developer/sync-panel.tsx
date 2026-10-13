@@ -6,8 +6,10 @@ import { BANKS, CARDS, type BankSource } from "@/lib/bank-sources";
 import { fingerprint, seal } from "../../../../sync/seal.mjs";
 import {
   clearBankCredentials,
+  exportHouseholdData,
   getSyncState,
   requestSync,
+  resetHouseholdData,
   saveBankCredentials,
   type SyncRun,
   type SyncState,
@@ -31,6 +33,24 @@ function readTrustedKey() {
   } catch {
     return null;
   }
+}
+
+const RANGES = [
+  { months: 1, label: "חודש אחורה" },
+  { months: 3, label: "שלושה חודשים" },
+  { months: 6, label: "חצי שנה" },
+  { months: 12, label: "שנה" },
+];
+
+const RESET_WORD = "מחק";
+
+/** Hands the browser a file to save. */
+function download(name: string, text: string) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 const STATUS_LABEL: Record<SyncRun["status"], string> = {
@@ -68,6 +88,8 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const outputRef = useRef<HTMLPreElement>(null);
+  const [monthsBack, setMonthsBack] = useState(1);
+  const [resetText, setResetText] = useState("");
   const [keyCode, setKeyCode] = useState("");
   const [trustedCode, setTrustedCode] = useState<string | null>(null);
   const [codeConfirmed, setCodeConfirmed] = useState(false);
@@ -174,6 +196,20 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
       }
       setTrustedCode(keyCode);
       setCodeConfirmed(false);
+    }
+  }
+
+  async function onReset() {
+    if (resetText !== RESET_WORD) return;
+    const done = await act(async () => {
+      // A copy first: the deletion cannot be undone.
+      const backup = await exportHouseholdData();
+      download(`home-budget-backup-${backup.exportedAt.slice(0, 10)}.json`, JSON.stringify(backup, null, 2));
+      return resetHouseholdData(resetText);
+    }, "האיפוס לא הושלם. ייתכן שחלק מהנתונים כבר נמחקו; רעננו את המסך כדי לראות מה נשאר.");
+    if (done) {
+      setResetText("");
+      setNotice("הנתונים נמחקו. קובץ גיבוי ירד למכשיר.");
     }
   }
 
@@ -291,11 +327,6 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
             אפשר למלא פרטים רק אחרי שהמחשב בבית התחבר פעם אחת, כי ההצפנה נעשית עם המפתח שלו.
           </p>
         )}
-        {notice && (
-          <p role="status" className="rounded-2xl bg-good-soft p-3 text-sm">
-            {notice}
-          </p>
-        )}
       </Card>
 
       <Card className="space-y-3">
@@ -311,18 +342,32 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
             </span>
           )}
         </div>
+        <label className="block space-y-1">
+          <span className="text-sm font-semibold">כמה אחורה לקרוא</span>
+          <select
+            className="field"
+            value={monthsBack}
+            onChange={(event) => setMonthsBack(Number(event.target.value))}
+          >
+            {RANGES.map((range) => (
+              <option key={range.months} value={range.months}>
+                {range.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="grid grid-cols-2 gap-3">
           <button
             className="btn btn-quiet"
             disabled={busy || active || !state.agentOnline}
-            onClick={() => void act(() => requestSync(true), "הבקשה לא נשלחה.")}
+            onClick={() => void act(() => requestSync(true, monthsBack), "הבקשה לא נשלחה.")}
           >
             ריצת ניסיון
           </button>
           <button
             className="btn"
             disabled={busy || active || !state.agentOnline}
-            onClick={() => void act(() => requestSync(false), "הבקשה לא נשלחה.")}
+            onClick={() => void act(() => requestSync(false, monthsBack), "הבקשה לא נשלחה.")}
           >
             סנכרון
           </button>
@@ -359,6 +404,37 @@ export function SyncPanel({ initialState }: { initialState: SyncState }) {
         )}
       </Card>
 
+      <Card className="space-y-3">
+        <SectionTitle>איפוס נתונים</SectionTitle>
+        <p className="text-sm text-muted">
+          מוחק את כל ההוצאות וההכנסות (<span className="num">{state.stored.transactions}</span> שורות) ואת
+          היסטוריית הבוט (<span className="num">{state.stored.chatMessages}</span> הודעות), כדי להתחיל מחדש
+          מהבנק. הקטגוריות, סכומי התקציב, ההגדרות והמשתמשים נשארים. לפני המחיקה יורד למכשיר קובץ גיבוי, אבל
+          אין דרך להחזיר אותו לאפליקציה בלחיצה.
+        </p>
+        <label className="block space-y-1">
+          <span className="text-sm font-semibold">כדי לאשר, כתבו: {RESET_WORD}</span>
+          <input
+            className="field"
+            value={resetText}
+            onChange={(event) => setResetText(event.target.value.trim())}
+            autoComplete="off"
+          />
+        </label>
+        <button
+          className="btn btn-danger w-full"
+          disabled={busy || active || resetText !== RESET_WORD}
+          onClick={() => void onReset()}
+        >
+          מחיקת כל ההוצאות, ההכנסות והצ׳אט
+        </button>
+      </Card>
+
+      {notice && (
+        <p role="status" className="rounded-3xl bg-good-soft p-4 text-sm">
+          {notice}
+        </p>
+      )}
       {error && (
         <p role="alert" className="rounded-3xl bg-danger-soft p-4 text-sm text-danger">
           {error}

@@ -111,6 +111,8 @@ create table if not exists public.bank_sync_runs (
   household_id uuid not null references public.households (id) on delete cascade,
   requested_by uuid references auth.users (id) on delete set null default auth.uid(),
   dry_run      boolean not null default true,
+  -- How far back to read. The daily sync reads one month; a first import can ask for more.
+  months_back  int not null default 1 check (months_back between 1 and 12),
   status       text not null default 'queued' check (status in ('queued', 'running', 'done', 'failed')),
   output       text not null default '',
   created_at   timestamptz not null default now(),
@@ -120,6 +122,9 @@ create table if not exists public.bank_sync_runs (
 
 create index if not exists bank_sync_runs_household_idx
   on public.bank_sync_runs (household_id, created_at desc);
+
+alter table public.bank_sync_runs
+  add column if not exists months_back int not null default 1 check (months_back between 1 and 12);
 
 -- For databases created before the member limit existed.
 alter table public.households add column if not exists max_members int not null default 2;

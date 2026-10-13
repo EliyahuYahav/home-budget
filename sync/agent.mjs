@@ -12,7 +12,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { credentialsFromEnv } from "./bank-sync.mjs";
-import { SetupError, defaultSince, findChrome, here, loadEnvFiles, redact, runSync, secretsOf, signIn, sourcesFrom } from "./run-sync.mjs";
+import { SetupError, findChrome, here, loadEnvFiles, redact, runSync, secretsOf, signIn, sinceMonthsBack, sourcesFrom } from "./run-sync.mjs";
 import { fingerprint, generateKeyPair, open } from "./seal.mjs";
 
 const KEY_FILE = join(here, "agent-key.json");
@@ -103,7 +103,7 @@ async function main() {
       if (!error) sent = snapshot;
     };
 
-    console.log(`Run ${run.id} (${run.dry_run ? "dry run" : "sync"}) started.`);
+    console.log(`Run ${run.id} (${run.dry_run ? "dry run" : "sync"}, ${run.months_back ?? 1} month(s) back) started.`);
     await supabase.from("bank_sync_runs").update({ status: "running", started_at: stamp() }).eq("id", run.id);
     const timer = setInterval(() => void flush(), FLUSH_MS);
     let status = "done";
@@ -116,7 +116,7 @@ async function main() {
         householdId,
         sources,
         chrome,
-        since: defaultSince(),
+        since: sinceMonthsBack(run.months_back),
         dryRun: run.dry_run,
         showBrowser: process.env.SHOW_BROWSER === "on",
         log,
@@ -163,7 +163,8 @@ async function main() {
       }
       const { data: run, error } = await supabase
         .from("bank_sync_runs")
-        .select("id, dry_run, created_at")
+        // Every column, so a database without the newest ones still answers.
+        .select("*")
         .eq("household_id", householdId)
         .eq("status", "queued")
         .order("created_at")
