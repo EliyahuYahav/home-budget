@@ -228,16 +228,28 @@ export async function saveCategory(form: FormData) {
   if (readError) throw new Error(readError.message);
   if (!current) return;
 
-  // The fund columns are written only for a fund, so the other kinds still save on a
-  // database that has not been given those columns yet.
-  let fund: { fund_start?: string | null; fund_opening?: number } = {};
+  // The fund and goal columns are written only where they are used, so the other kinds still
+  // save on a database that has not been given those columns yet.
+  let fund: { fund_start?: string | null; fund_opening?: number; goal_amount?: number | null; goal_due?: string | null } = {};
+  const opening = Number(text(form, "opening").replace(/,/g, "") || "0");
+  if (!Number.isFinite(opening) || opening < 0) return;
   if (kind === "fund") {
-    const opening = Number(text(form, "fundOpening").replace(/,/g, "") || "0");
-    if (!Number.isFinite(opening) || opening < 0) return;
     fund = { fund_opening: opening };
     if (current.kind !== "fund" || !current.fund_start) fund.fund_start = fundStartNow();
   } else if (current.kind === "fund") {
     fund = { fund_start: null, fund_opening: 0 };
+  }
+  if (kind === "saving") {
+    const goal = Number(text(form, "goalAmount").replace(/,/g, "") || "0");
+    if (!Number.isFinite(goal) || goal < 0) return;
+    const due = text(form, "goalDue");
+    if (goal > 0) {
+      fund = { ...fund, goal_amount: goal, goal_due: /^\d{4}-\d{2}$/.test(due) ? `${due}-01` : null, fund_opening: opening };
+    } else if (current.goal_amount != null) {
+      fund = { ...fund, goal_amount: null, goal_due: null, fund_opening: 0 };
+    }
+  } else if (current.goal_amount != null) {
+    fund = { ...fund, goal_amount: null, goal_due: null };
   }
 
   const { error } = await ctx.supabase
@@ -415,6 +427,17 @@ export async function sendChatMessage(
     ...summaryBefore.categories
       .filter((c) => !c.fund)
       .map((c) => `- ${c.category.name}: ${c.spent} / ${c.category.monthly_budget}`),
+    ...(summaryBefore.categories.some((c) => c.goal)
+      ? [
+          "Savings goals (saved so far / goal; wanted by; needed every month to arrive on time):",
+          ...summaryBefore.categories
+            .filter((c) => c.goal)
+            .map(
+              (c) =>
+                `- ${c.category.name}: ${c.goal!.saved} / ${c.goal!.target}; ${c.goal!.due ?? "no date"}; ${c.goal!.neededPerMonth ?? "-"}`,
+            ),
+        ]
+      : []),
     ...(summaryBefore.categories.some((c) => c.fund)
       ? [
           "Funds for yearly expenses (in the fund now; put in every month; charged this month). A charge filed under a fund is paid from the fund and does not reduce what is free this month:",
@@ -471,6 +494,14 @@ export async function sendChatMessage(
           status.fund.shortfall > 0
             ? `${status.category.name}: הקרן התרוקנה, ו־${formatILS(status.fund.shortfall)} ירדו מהחודש`
             : `${status.category.name}: שולם מהקרן, נשארו בה ${formatILS(status.fund.balance)}`,
+        );
+        continue;
+      }
+      if (status.goal) {
+        lines.push(
+          status.goal.left > 0
+            ? `${status.category.name}: ${formatILS(status.goal.saved)} מתוך ${formatILS(status.goal.target)}, נשארו ${formatILS(status.goal.left)} ליעד`
+            : `${status.category.name}: היעד של ${formatILS(status.goal.target)} הושג`,
         );
         continue;
       }

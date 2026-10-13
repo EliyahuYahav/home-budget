@@ -19,6 +19,7 @@ export default async function HomePage() {
     .sort((a, b) => (b.ratio ?? Infinity) - (a.ratio ?? Infinity));
   const overBudget = summary.flexibleRemaining < 0;
   const funds = summary.categories.filter((c) => c.fund);
+  const goals = summary.categories.filter((c) => c.goal);
   // What comes off the income before the day-to-day money, in words.
   const setAside = funds.length > 0 ? "חיסכון, קרנות וחשבונות קבועים" : "חיסכון וחשבונות קבועים";
 
@@ -121,6 +122,27 @@ export default async function HomePage() {
         <p className="text-sm text-muted">
           מופרש מההכנסה בתחילת החודש, לפני שמחשבים כמה מותר להוציא.
         </p>
+        {goals.length > 0 && (
+          <ul className="space-y-2.5 border-t border-line pt-2.5">
+            {goals.map(({ category, goal }) => (
+              <li key={category.id} className="space-y-1.5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span>
+                    {category.name}
+                    {goal!.due ? <span className="text-sm text-muted">, עד {monthLabel(goal!.due)}</span> : null}
+                  </span>
+                  <span>
+                    <Money amount={goal!.saved} className="font-bold" />{" "}
+                    <span className="text-sm text-muted">
+                      מתוך <Money amount={goal!.target} />
+                    </span>
+                  </span>
+                </div>
+                <ProgressBar label={`התקדמות ליעד ${category.name}`} status="good" ratio={goal!.ratio} />
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       {funds.length > 0 && (

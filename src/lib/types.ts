@@ -11,8 +11,12 @@ export interface Category {
   archived: boolean;
   /** For a fund: the first day of the month it began (YYYY-MM-DD). */
   fund_start?: string | null;
-  /** For a fund: what was already in it when it began. */
+  /** For a fund: what was already in it when it began. For a savings goal: what was saved before the app. */
   fund_opening?: number;
+  /** For a savings line with a goal: how much is wanted. */
+  goal_amount?: number | null;
+  /** For a savings goal: the first day of the month it is wanted by (YYYY-MM-DD). */
+  goal_due?: string | null;
 }
 
 export interface Transaction {

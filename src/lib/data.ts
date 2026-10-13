@@ -52,7 +52,35 @@ export async function getCategories(ctx: AppContext): Promise<Category[]> {
     monthly_budget: num(c.monthly_budget),
     fund_start: c.fund_start ?? null,
     fund_opening: num(c.fund_opening),
+    goal_amount: c.goal_amount == null ? null : num(c.goal_amount),
+    goal_due: c.goal_due ?? null,
   })) as Category[];
+}
+
+/**
+ * What was put aside before `month` in each savings line that has a goal, by category id:
+ * what summarizeMonth needs to show how far each goal has come.
+ */
+export async function getGoalSaved(ctx: AppContext, categories: Category[], month: string): Promise<Record<string, number>> {
+  const goals = categories.filter((c) => c.kind === "saving" && !c.archived && (c.goal_amount ?? 0) > 0);
+  if (goals.length === 0) return {};
+
+  const { data, error } = await ctx.supabase
+    .from("transactions")
+    .select("category_id, amount")
+    .eq("household_id", ctx.household.id)
+    .eq("type", "expense")
+    .in("category_id", goals.map((c) => c.id))
+    .lt("occurred_on", monthRange(month).start)
+    .limit(1000);
+  if (error) throw new Error(error.message);
+
+  const saved: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const id = row.category_id as string;
+    saved[id] = (saved[id] ?? 0) + num(row.amount);
+  }
+  return saved;
 }
 
 /**
@@ -179,12 +207,16 @@ export async function getMonthData(ctx: AppContext, month: string) {
     getTransactions(ctx, month),
     getRecurringIncomes(ctx),
   ]);
-  const fundHistory = await getFundHistory(ctx, categories, month);
+  const [fundHistory, goalSaved] = await Promise.all([
+    getFundHistory(ctx, categories, month),
+    getGoalSaved(ctx, categories, month),
+  ]);
   // For every total and summary: cash purchases come off the cash withdrawals.
   return {
     categories,
     transactions: settleCash(transactions, categories).transactions,
     recurringIncomes,
     fundHistory,
+    goalSaved,
   };
 }

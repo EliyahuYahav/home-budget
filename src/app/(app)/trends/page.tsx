@@ -1,6 +1,6 @@
 import { Card, EmptyNote, Money, MonthNav, PageTitle, SectionTitle } from "@/components/ui";
 import { dailySpending, formatILS, settleCash, summarizeMonth } from "@/lib/budget";
-import { getCategories, getFundHistory, getRecurringIncomes, getTransactions, requireContext } from "@/lib/data";
+import { getCategories, getFundHistory, getGoalSaved, getRecurringIncomes, getTransactions, requireContext } from "@/lib/data";
 import { isValidMonth, monthLabel, monthOf, shiftMonth, shortDate, todayISO } from "@/lib/dates";
 import {
   averageMonth,
@@ -48,8 +48,11 @@ export default async function TrendsPage({ searchParams }: PageProps<"/trends">)
   const previous = totals[totals.length - 2];
   const change = previous.hasData ? changeFrom(current.spent, previous.spent) : null;
 
-  const fundHistory = await getFundHistory(ctx, categories, month);
-  const summary = summarizeMonth({ month, today, categories, transactions, recurringIncomes, fundHistory });
+  const [fundHistory, goalSaved] = await Promise.all([
+    getFundHistory(ctx, categories, month),
+    getGoalSaved(ctx, categories, month),
+  ]);
+  const summary = summarizeMonth({ month, today, categories, transactions, recurringIncomes, fundHistory, goalSaved });
   const flexibleSpent = dailySpending(month, transactions, categories).reduce((a, b) => a + b, 0);
   const projected = projectedSpending({
     month,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dailySpending, formatILS, fundStatus, settleCash, summarizeMonth } from "./budget";
+import { dailySpending, formatILS, fundStatus, goalStatus, settleCash, summarizeMonth } from "./budget";
 import type { Category, Transaction } from "./types";
 
 const category = (id: string, over: Partial<Category> = {}): Category => ({
@@ -314,5 +314,53 @@ describe("funds for yearly expenses", () => {
     });
     expect(summary.fundsReserved).toBe(0);
     expect(summary.spent).toBe(700);
+  });
+});
+
+describe("savings goals", () => {
+  const holiday = category("holiday", {
+    kind: "saving",
+    monthly_budget: 500,
+    goal_amount: 8000,
+    goal_due: "2027-06-01",
+    fund_opening: 1000,
+  });
+
+  it("adds up what was saved before the app, in earlier months and this month", () => {
+    const goal = goalStatus(holiday, "2026-10", 1500, 500)!;
+    expect(goal).toMatchObject({ target: 8000, due: "2027-06", saved: 3000, left: 5000, late: false });
+    expect(goal.ratio).toBeCloseTo(0.375);
+    // This month's deposit is in: eight months are left, November to June.
+    expect(goal.neededPerMonth).toBe(625);
+  });
+
+  it("counts this month while nothing was put aside in it", () => {
+    // 6,300 left over nine months, October to June.
+    expect(goalStatus(holiday, "2026-10", 700, 0)!.neededPerMonth).toBe(700);
+  });
+
+  it("is reached, late, or without a date", () => {
+    expect(goalStatus(holiday, "2026-10", 7000, 500)).toMatchObject({ left: 0, ratio: 1, neededPerMonth: null, late: false });
+    expect(goalStatus(holiday, "2027-07", 2000, 0)).toMatchObject({ left: 5000, neededPerMonth: null, late: true });
+    expect(goalStatus({ ...holiday, goal_due: null }, "2026-10", 0, 0)).toMatchObject({ due: null, neededPerMonth: null, late: false });
+  });
+
+  it("exists only for a savings line that was given a goal", () => {
+    expect(goalStatus({ ...holiday, goal_amount: null }, "2026-10", 0, 0)).toBeNull();
+    expect(goalStatus({ ...holiday, kind: "expense" }, "2026-10", 0, 0)).toBeNull();
+  });
+
+  it("rides on the month's summary without changing its sums", () => {
+    const input = {
+      month: "2026-10",
+      today: "2026-10-11",
+      recurringIncomes: [{ id: "i1", name: "salary", amount: 12000 }],
+      transactions: [tx(500, "holiday")],
+    };
+    const plain = summarizeMonth({ ...input, categories: [...categories, { ...holiday, goal_amount: null }] });
+    const withGoal = summarizeMonth({ ...input, categories: [...categories, holiday], goalSaved: { holiday: 1500 } });
+    expect(withGoal.remaining).toBe(plain.remaining);
+    expect(withGoal.categories.find((c) => c.category.id === "holiday")!.goal).toMatchObject({ saved: 3000 });
+    expect(plain.categories.find((c) => c.category.id === "holiday")!.goal).toBeUndefined();
   });
 });

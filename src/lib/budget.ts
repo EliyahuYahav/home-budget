@@ -11,6 +11,59 @@ export interface CategoryStatus {
   status: "ok" | "warning" | "over";
   /** Set for a fund: `spent` is then what was charged to it this month. */
   fund?: FundStatus;
+  /** Set for a savings line that has a goal. */
+  goal?: GoalStatus;
+}
+
+/** A savings goal ("summer holiday, 8,000, by June"), as it stands at the end of one month. */
+export interface GoalStatus {
+  target: number;
+  /** The month it is wanted by ("YYYY-MM"), when one was given. */
+  due: string | null;
+  /** Everything put aside so far, with what was saved before the app. */
+  saved: number;
+  /** target - saved, never negative. */
+  left: number;
+  /** saved / target, 0..1. */
+  ratio: number;
+  /**
+   * What each month still has to bring to arrive on time: `left` over the months to the due
+   * month, counting this month only while nothing was put aside in it. null with no due month,
+   * and once the goal is reached.
+   */
+  neededPerMonth: number | null;
+  /** The due month has passed and the goal is not reached. */
+  late: boolean;
+}
+
+/**
+ * @param savedBefore Put aside in this line in the months before `month`.
+ * @param savedThisMonth Put aside in it during `month`.
+ */
+export function goalStatus(category: Category, month: string, savedBefore: number, savedThisMonth: number): GoalStatus | null {
+  const target = category.goal_amount ?? 0;
+  if (category.kind !== "saving" || target <= 0) return null;
+  const due = category.goal_due ? monthOf(category.goal_due) : null;
+  const saved = (category.fund_opening ?? 0) + savedBefore + savedThisMonth;
+  const left = Math.max(target - saved, 0);
+
+  let neededPerMonth: number | null = null;
+  if (due && left > 0 && due >= month) {
+    const [dueYear, dueMonth] = due.split("-").map(Number);
+    const [year, monthNumber] = month.split("-").map(Number);
+    const monthsAfter = (dueYear - year) * 12 + (dueMonth - monthNumber);
+    // A month that already had its deposit is not counted on for another.
+    neededPerMonth = left / Math.max(monthsAfter + (savedThisMonth > 0 ? 0 : 1), 1);
+  }
+  return {
+    target,
+    due,
+    saved: round2(saved),
+    left: round2(left),
+    ratio: Math.min(saved / target, 1),
+    neededPerMonth: neededPerMonth === null ? null : round2(neededPerMonth),
+    late: due !== null && left > 0 && due < month,
+  };
 }
 
 /** A fund for a yearly expense, in one month. */
@@ -156,6 +209,8 @@ export function summarizeMonth(input: {
   recurringIncomes: RecurringIncome[];
   /** Expenses filed under the funds in the months before this one. */
   fundHistory?: FundCharge[];
+  /** Put aside before this month in each savings line that has a goal, by category id. */
+  goalSaved?: Record<string, number>;
 }): MonthSummary {
   const { month, today, transactions, recurringIncomes } = input;
   const categories = input.categories.filter((c) => !c.archived);
@@ -230,6 +285,7 @@ export function summarizeMonth(input: {
     const ratio = category.monthly_budget > 0 ? categorySpent / category.monthly_budget : null;
     let status: CategoryStatus["status"] = "ok";
     const fund = funds.get(category.id);
+    const goal = goalStatus(category, month, input.goalSaved?.[category.id] ?? 0, categorySpent);
     // Reaching a savings target is the goal, so savings lines are never flagged.
     if (category.kind === "expense") {
       if (ratio === null ? categorySpent > 0 : ratio > 1) status = "over";
@@ -237,7 +293,7 @@ export function summarizeMonth(input: {
     } else if (fund && fund.shortfall > 0) {
       status = "over";
     }
-    return { category, spent: round2(categorySpent), ratio: fund ? null : ratio, status, ...(fund ? { fund } : {}) };
+    return { category, spent: round2(categorySpent), ratio: fund ? null : ratio, status, ...(fund ? { fund } : {}), ...(goal ? { goal } : {}) };
   });
 
   return {

@@ -176,6 +176,14 @@ expect("an unknown kind of category is refused", !r.ok, show(r));
 r = await as("B", "update public.categories set fund_opening = -1 where household_id = $1 and name = 'ביטוח רכב'", [hidB]);
 expect("a fund cannot open below zero", !r.ok, show(r));
 
+// --- savings goals
+r = await as("B", "update public.categories set goal_amount = 8000, goal_due = '2027-06-01' where household_id = $1 and name = 'חסכונות'", [hidB]);
+expect("a household can give a savings line a goal", r.ok && r.affected === 1, show(r));
+r = await as("B", "update public.categories set goal_amount = 0 where household_id = $1 and name = 'חסכונות'", [hidB]);
+expect("a goal of nothing is refused", !r.ok, show(r));
+r = await as("A", "update public.categories set goal_amount = 1 where household_id = $1 and name = 'חסכונות'", [hidB]);
+expect("other household cannot change B's goal", blocked(r), show(r));
+
 // --- reset: a household can clear its own rows, and only its own
 r = await as("A", "delete from public.transactions where household_id = $1", [hidA]);
 expect("a household can delete all of its own transactions", r.ok && r.affected === 3, show(r));

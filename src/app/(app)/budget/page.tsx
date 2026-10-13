@@ -2,7 +2,7 @@ import { addCategory, restoreCategory, saveCategory } from "@/app/actions";
 import { ChevronDown, PlusIcon } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { Card, Money, MonthNav, PageTitle, ProgressBar } from "@/components/ui";
-import { summarizeMonth, type CategoryStatus } from "@/lib/budget";
+import { summarizeMonth, type CategoryStatus, type GoalStatus } from "@/lib/budget";
 import { getMonthData, requireContext } from "@/lib/data";
 import { isValidMonth, monthLabel, monthOf, todayISO } from "@/lib/dates";
 
@@ -41,6 +41,49 @@ function FundSummary({ row }: { row: CategoryStatus }) {
         </p>
       )}
     </summary>
+  );
+}
+
+/** How far a savings goal has come, under the month's own line. */
+function GoalLine({ goal, monthly }: { goal: GoalStatus; monthly: number }) {
+  const behind = goal.late || (goal.neededPerMonth !== null && goal.neededPerMonth > monthly + 0.5);
+  return (
+    <div className="space-y-1.5 border-t border-line pt-2">
+      <div className="flex items-baseline justify-between gap-2 text-sm">
+        <span className="font-semibold">
+          היעד{goal.due ? `, עד ${monthLabel(goal.due)}` : ""}
+        </span>
+        <span>
+          <Money amount={goal.saved} className="font-bold" />{" "}
+          <span className="text-muted">
+            מתוך <Money amount={goal.target} />
+          </span>
+        </span>
+      </div>
+      <ProgressBar label="התקדמות ליעד" ratio={goal.ratio} status="good" />
+      <p className={`text-sm ${behind ? "text-warn" : "text-muted"}`}>
+        {goal.left === 0 ? (
+          "היעד הושג"
+        ) : goal.late ? (
+          <>
+            המועד עבר, וחסרים עוד <Money amount={goal.left} />
+          </>
+        ) : goal.neededPerMonth !== null ? (
+          <>
+            כדי להגיע בזמן צריך <Money amount={goal.neededPerMonth} /> בחודש
+            {behind ? (
+              <>
+                , יותר מ־<Money amount={monthly} /> שמתוכננים
+              </>
+            ) : null}
+          </>
+        ) : (
+          <>
+            נשארו <Money amount={goal.left} />
+          </>
+        )}
+      </p>
+    </div>
   );
 }
 
@@ -91,13 +134,14 @@ function CategoryRow({ row }: { row: CategoryStatus }) {
                 </>
               )}
             </p>
+            {row.goal && <GoalLine goal={row.goal} monthly={category.monthly_budget} />}
           </summary>
         )}
 
         {/* A new form whenever the saved values change: after a save React resets each field
             to the default it was first given, which would show the old choice again. */}
         <form
-          key={`${category.name}|${category.monthly_budget}|${category.kind}|${category.is_fixed}|${category.fund_opening}`}
+          key={`${category.name}|${category.monthly_budget}|${category.kind}|${category.is_fixed}|${category.fund_opening}|${category.goal_amount}|${category.goal_due}`}
           action={saveCategory}
           className="grid grid-cols-2 gap-3 px-3.5 pb-3.5"
         >
@@ -116,12 +160,44 @@ function CategoryRow({ row }: { row: CategoryStatus }) {
               required
             />
           </label>
+          {saving && (
+            <>
+              <label className="space-y-1">
+                <span className="text-sm font-semibold">יעד (לא חובה)</span>
+                <input
+                  className="field num"
+                  name="goalAmount"
+                  inputMode="decimal"
+                  placeholder="8,000"
+                  defaultValue={category.goal_amount ?? ""}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-semibold">עד חודש</span>
+                <input
+                  className="field num"
+                  type="month"
+                  name="goalDue"
+                  defaultValue={category.goal_due ? monthOf(category.goal_due) : ""}
+                />
+              </label>
+              <label className="col-span-2 space-y-1">
+                <span className="text-sm font-semibold">כמה כבר נחסך ליעד לפני האפליקציה</span>
+                <input
+                  className="field num"
+                  name="opening"
+                  inputMode="decimal"
+                  defaultValue={category.fund_opening ?? 0}
+                />
+              </label>
+            </>
+          )}
           {isFund && (
             <label className="col-span-2 space-y-1">
               <span className="text-sm font-semibold">כמה כבר היה בצד כשהקרן נפתחה</span>
               <input
                 className="field num"
-                name="fundOpening"
+                name="opening"
                 inputMode="decimal"
                 defaultValue={category.fund_opening ?? 0}
               />

@@ -41,8 +41,13 @@ create table if not exists public.categories (
   sort_order     int not null default 0,
   archived       boolean not null default false,
   -- For a fund: the first day of the month it began, and what was already in it then.
+  -- A savings goal uses fund_opening too, for what was saved before the app knew of it.
   fund_start     date,
   fund_opening   numeric(12, 2) not null default 0 check (fund_opening >= 0),
+  -- A savings line with a goal ("summer holiday, 8,000, by June"): how much, and the first
+  -- day of the month it is wanted by. Both are optional.
+  goal_amount    numeric(12, 2) check (goal_amount > 0),
+  goal_due       date,
   unique (household_id, name)
 );
 
@@ -50,6 +55,9 @@ create table if not exists public.categories (
 alter table public.categories add column if not exists fund_start date;
 alter table public.categories
   add column if not exists fund_opening numeric(12, 2) not null default 0 check (fund_opening >= 0);
+alter table public.categories
+  add column if not exists goal_amount numeric(12, 2) check (goal_amount > 0);
+alter table public.categories add column if not exists goal_due date;
 alter table public.categories drop constraint if exists categories_kind_check;
 alter table public.categories
   add constraint categories_kind_check check (kind in ('expense', 'saving', 'fund'));
