@@ -106,7 +106,7 @@ export default async function SettingsPage() {
 
         {payerSuggestions.length > 0 && (
           <div className="space-y-1.5">
-            <p className="text-sm font-semibold">נכנסו לחשבון סביב תחילת החודש</p>
+            <p className="text-sm font-semibold">נכנסו לחשבון בימים האחרונים של חודש</p>
             <ul className="divide-y divide-line rounded-2xl border border-line">
               {payerSuggestions.map(({ name, date, amount }) => (
                 <li key={name} className="flex items-center gap-3 px-3 py-2.5">

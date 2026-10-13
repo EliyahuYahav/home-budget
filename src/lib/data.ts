@@ -93,9 +93,9 @@ export interface BankPayer {
 }
 
 /**
- * Who paid into the bank account around the turn of a month lately: the incomes that could be
- * a salary for the month that begins. Only the last three days of a month and its 1st count,
- * which is where such a salary lands; one entry per payer, the most recent first.
+ * Who paid into the bank account in the last three days of a month lately: the incomes that
+ * could be a salary for the month that begins. An income on the 1st is already in the right
+ * month, so it is not offered. One entry per payer, the most recent first.
  */
 export async function getRecentBankPayers(ctx: AppContext, since: string): Promise<BankPayer[]> {
   const { data, error } = await ctx.supabase
@@ -114,7 +114,7 @@ export async function getRecentBankPayers(ctx: AppContext, since: string): Promi
     const date = String(row.occurred_on);
     const day = Number(date.slice(8, 10));
     const lastDay = new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).getUTCDate();
-    if (day !== 1 && day < lastDay - 2) continue;
+    if (day < lastDay - 2) continue;
     // An income already counted for the next month carries a note of the day it arrived.
     const name = String(row.description).replace(/ \(נכנס ב־[\d.]+\)$/, "").trim();
     if (name && !payers.has(name)) payers.set(name, { name, date, amount: num(row.amount) });
