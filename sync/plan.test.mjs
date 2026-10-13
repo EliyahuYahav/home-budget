@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { israelDate, planImport, toCandidates } from "./plan.mjs";
+import { countedNextMonth, israelDate, planImport, toCandidates } from "./plan.mjs";
 
 const txn = (over = {}) => ({
   identifier: 1001,
@@ -21,6 +21,27 @@ describe("israelDate", () => {
   it("reads the scraper's UTC instant as the day it is in Israel", () => {
     expect(israelDate("2026-10-04T21:00:00.000Z")).toBe("2026-10-05");
     expect(israelDate("2026-01-14T22:00:00.000Z")).toBe("2026-01-15");
+  });
+});
+
+describe("countedNextMonth", () => {
+  it("moves the last two days of a month to the 1st of the next", () => {
+    expect(countedNextMonth("2026-10-31", 2)).toBe("2026-11-01");
+    expect(countedNextMonth("2026-10-30", 2)).toBe("2026-11-01");
+    expect(countedNextMonth("2026-10-29", 2)).toBeNull();
+    expect(countedNextMonth("2026-11-01", 2)).toBeNull();
+  });
+
+  it("knows how long each month is, and crosses the year", () => {
+    expect(countedNextMonth("2026-09-30", 2)).toBe("2026-10-01");
+    expect(countedNextMonth("2026-02-27", 2)).toBe("2026-03-01");
+    expect(countedNextMonth("2026-02-26", 2)).toBeNull();
+    expect(countedNextMonth("2028-02-29", 2)).toBe("2028-03-01");
+    expect(countedNextMonth("2026-12-31", 2)).toBe("2027-01-01");
+  });
+
+  it("is off with zero days", () => {
+    expect(countedNextMonth("2026-10-31", 0)).toBeNull();
   });
 });
 
@@ -86,6 +107,31 @@ describe("toCandidates", () => {
       ["expense", 230, "שופרסל דיל"],
     ]);
     expect(skipped.credits).toBe(0);
+  });
+
+  it("counts a salary paid at the very end of a month for the next month", () => {
+    const bank = source(
+      [
+        // 2026-10-30T22:00Z is midnight on the 31st in Israel (winter time).
+        txn({ identifier: 21, date: "2026-10-30T22:00:00.000Z", chargedAmount: 9500, description: "משכורת" }),
+        txn({ identifier: 22, date: "2026-10-30T22:00:00.000Z", chargedAmount: -80, description: "מכולת" }),
+        txn({ identifier: 23, date: "2026-10-19T21:00:00.000Z", chargedAmount: 300, description: "החזר" }),
+      ],
+      { company: "discount", kind: "bank" },
+    );
+    const { candidates } = toCandidates([bank]);
+    expect(candidates.map((c) => [c.type, c.date, c.bankDate, c.description, c.externalId])).toEqual([
+      ["income", "2026-11-01", "2026-10-31", "משכורת (נכנס ב־31.10)", "discount:1234:21"],
+      // An expense on the same day stays where it is, and so does income in the middle of the month.
+      ["expense", "2026-10-31", undefined, "מכולת", "discount:1234:22"],
+      ["income", "2026-10-20", undefined, "החזר", "discount:1234:23"],
+    ]);
+    expect(toCandidates([bank], { lateIncomeDays: 0 }).candidates[0].date).toBe("2026-10-31");
+  });
+
+  it("leaves a refund on a card on the day it happened", () => {
+    const card = source([txn({ identifier: 31, date: "2026-10-30T22:00:00.000Z", chargedAmount: 50 })]);
+    expect(toCandidates([card]).candidates[0].date).toBe("2026-10-31");
   });
 
   it("leaves out both sides of a transfer between the household's own accounts", () => {
@@ -214,7 +260,7 @@ describe("planImport", () => {
 
   it("does nothing for a transaction imported on an earlier run", () => {
     const plan = planImport([candidate()], [row({ external_id: "max:1234:1001" })]);
-    expect(plan).toEqual({ inserts: [], links: [], known: [candidate()], repeated: [] });
+    expect(plan).toEqual({ inserts: [], links: [], known: [candidate()], repeated: [], moves: [] });
   });
 
   it("attaches the bank id to the same purchase written by hand a day earlier", () => {
@@ -230,6 +276,14 @@ describe("planImport", () => {
     );
     expect(plan.inserts).toHaveLength(1);
     expect(plan.links).toHaveLength(0);
+  });
+
+  it("moves an income imported earlier on the bank's date, but not one the user re-dated", () => {
+    const salary = candidate({ externalId: "discount:1:21", type: "income", amount: 9500, date: "2026-11-01", bankDate: "2026-10-31" });
+    const stored = row({ id: "salary", external_id: "discount:1:21", type: "income", amount: 9500, occurred_on: "2026-10-31" });
+    expect(planImport([salary], [stored]).moves).toEqual([{ id: "salary", candidate: salary }]);
+    expect(planImport([salary], [{ ...stored, occurred_on: "2026-11-01" }]).moves).toEqual([]);
+    expect(planImport([salary], [{ ...stored, occurred_on: "2026-10-15" }]).moves).toEqual([]);
   });
 
   it("matches income only to income written by hand", () => {

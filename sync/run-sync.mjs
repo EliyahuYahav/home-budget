@@ -202,6 +202,7 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
   const { candidates, accounts, skipped } = toCandidates(scraped, {
     cards: sources.filter((source) => source.kind === "card").map((source) => source.company),
     importIncome: process.env.IMPORT_INCOME !== "off",
+    lateIncomeDays: process.env.LATE_INCOME_DAYS === undefined || process.env.LATE_INCOME_DAYS === "" ? 2 : Number(process.env.LATE_INCOME_DAYS),
   });
 
   // Hand-written rows can sit a couple of days before the bank's date.
@@ -271,6 +272,12 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     const sign = candidate.type === "income" ? "+" : "-";
     log(`  ${sign} ${candidate.date}  ${candidate.amount.toFixed(2).padStart(9)}  ${candidate.description}  ->  ${name}`);
   }
+  for (const { candidate } of plan.moves) {
+    log(
+      `  > ${candidate.bankDate} -> ${candidate.date}  ${candidate.amount.toFixed(2).padStart(9)}  ${candidate.description}  ` +
+        `(income at the very end of a month is counted for the next one)`,
+    );
+  }
   for (const { candidate } of plan.links) {
     log(`  = ${candidate.date}  ${candidate.amount.toFixed(2).padStart(9)}  ${candidate.description}  (already written by hand)`);
   }
@@ -291,6 +298,14 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
       // Rows saved before a failure stay; the next run recognises them and adds only the rest.
       if (error) throw new Error(`Saving the new rows failed after ${start} of ${rows.length}: ${error.message}`);
     }
+    for (const { id, candidate } of plan.moves) {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ occurred_on: candidate.date })
+        .eq("id", id)
+        .eq("household_id", householdId);
+      if (error) throw new Error(`Moving an income to the next month failed: ${error.message}`);
+    }
     for (const { id, candidate } of plan.links) {
       const { error } = await supabase
         .from("transactions")
@@ -310,7 +325,8 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
 
   const verb = dryRun ? "would be added" : "added";
   log(
-    `${plan.inserts.length} ${verb}, ${plan.links.length} matched to hand-written rows, ${plan.known.length} already imported. ` +
+    `${plan.inserts.length} ${verb}, ${plan.links.length} matched to hand-written rows, ${plan.known.length} already imported, ` +
+      `${plan.moves.length} income(s) ${dryRun ? "would be " : ""}moved to the next month. ` +
       `Left out: ${skipped.pending} pending, ${skipped.credits} incoming, ${skipped.cardCharges.length} card charges in the bank account, ` +
       `${skipped.ownTransfers.length} transfers between your own accounts.`,
   );

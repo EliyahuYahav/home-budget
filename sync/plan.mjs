@@ -3,7 +3,8 @@
 
 /**
  * @typedef {{ company: string, kind: "bank" | "card", accounts: { accountNumber: string, txns: any[] }[] }} ScrapedSource
- * @typedef {{ externalId: string, company: string, account: string, type: "expense" | "income", amount: number, date: string, description: string }} Candidate
+ * @typedef {{ externalId: string, company: string, account: string, type: "expense" | "income", amount: number, date: string, bankDate?: string, description: string }} Candidate
+ *   `date` is the day the row is counted on. `bankDate` is set when that differs from the bank's own date.
  * @typedef {{ company: string, account: string, lines: number, expenses: number, income: number, pending: number, cardCharges: number, ownTransfers: number }} AccountCount
  * @typedef {{ id: string, external_id: string | null, type: string, amount: number, occurred_on: string }} ExistingRow
  */
@@ -30,6 +31,22 @@ export function israelDate(iso) {
 }
 
 const cents = (amount) => Math.round(amount * 100);
+
+/**
+ * A salary paid on the last day or two of a month is the money for the month that follows.
+ * For an income dated within the last `days` days of its month, returns the 1st of the next
+ * month; otherwise null.
+ */
+export function countedNextMonth(date, days) {
+  if (!(days > 0)) return null;
+  const [year, month, day] = date.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day <= lastDay - days) return null;
+  const next = new Date(Date.UTC(year, month, 1));
+  return next.toISOString().slice(0, 10);
+}
+
+const dayAndMonth = (date) => `${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}`;
 
 function dayDistance(a, b) {
   return Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
@@ -80,14 +97,16 @@ function ownTransfers(sources) {
  * money coming in.
  *
  * @param {ScrapedSource[]} sources
- * @param {{ cards?: string[], importIncome?: boolean }} [options] `cards` are the card
- *   companies set up for reading, whether or not this run reached them.
+ * @param {{ cards?: string[], importIncome?: boolean, lateIncomeDays?: number }} [options] `cards` are the card
+ *   companies set up for reading, whether or not this run reached them. An income in a bank
+ *   account dated within the last `lateIncomeDays` days of a month is counted on the 1st of the next.
  * @returns {{ candidates: Candidate[], accounts: AccountCount[], skipped: { pending: number, credits: number, cardCharges: string[], ownTransfers: string[] } }}
  *   `accounts` says, for each account read, how many lines there were and what became of them.
  */
 export function toCandidates(sources, options = {}) {
   const cards = options.cards ?? sources.filter((s) => s.kind === "card").map((s) => s.company);
   const importIncome = options.importIncome ?? true;
+  const lateIncomeDays = options.lateIncomeDays ?? 2;
   const candidates = [];
   const counts = [];
   const transfers = ownTransfers(sources);
@@ -154,14 +173,17 @@ export function toCandidates(sources, options = {}) {
         const installments = txn.installments
           ? ` (תשלום ${txn.installments.number} מתוך ${txn.installments.total})`
           : "";
+        // The id above is built from the bank's own date, so it stays the same either way.
+        const countedOn = type === "income" && kind === "bank" ? countedNextMonth(date, lateIncomeDays) : null;
         candidates.push({
           externalId: key,
           company,
           account: accountNumber,
           type,
           amount,
-          date,
-          description: `${name}${installments}`.slice(0, 200),
+          date: countedOn ?? date,
+          ...(countedOn ? { bankDate: date } : {}),
+          description: `${name}${installments}${countedOn ? ` (נכנס ב־${dayAndMonth(date)})` : ""}`.slice(0, 200),
         });
       }
     }
@@ -179,14 +201,17 @@ export const MATCH_DAYS = 2;
  *
  * @param {Candidate[]} candidates
  * @param {ExistingRow[]} existing
- * @returns {{ inserts: Candidate[], links: { id: string, candidate: Candidate }[], known: Candidate[], repeated: Candidate[] }}
+ * @returns {{ inserts: Candidate[], links: { id: string, candidate: Candidate }[], known: Candidate[], repeated: Candidate[], moves: { id: string, candidate: Candidate }[] }}
+ *   `moves` are incomes imported before, still on the bank's date, that are now counted on
+ *   the 1st of the next month. A row the user has put on some other date is left alone.
  *   `known` are already in the app. `repeated` carry the same id as an earlier line of this
  *   very read: either the bank listed one line twice, or its ids are not unique and a real
  *   transaction is being dropped, which is worth seeing rather than hiding.
  */
 export function planImport(candidates, existing) {
-  const knownIds = new Set(existing.map((row) => row.external_id).filter(Boolean));
+  const knownRows = new Map(existing.filter((row) => row.external_id).map((row) => [row.external_id, row]));
   const seenNow = new Set();
+  const moves = [];
   const free = existing.filter((row) => !row.external_id);
   const taken = new Set();
   const inserts = [];
@@ -200,8 +225,10 @@ export function planImport(candidates, existing) {
       continue;
     }
     seenNow.add(candidate.externalId);
-    if (knownIds.has(candidate.externalId)) {
+    const row = knownRows.get(candidate.externalId);
+    if (row) {
       known.push(candidate);
+      if (candidate.bankDate && row.occurred_on === candidate.bankDate) moves.push({ id: row.id, candidate });
       continue;
     }
 
@@ -220,5 +247,5 @@ export function planImport(candidates, existing) {
       inserts.push(candidate);
     }
   }
-  return { inserts, links, known, repeated };
+  return { inserts, links, known, repeated, moves };
 }
