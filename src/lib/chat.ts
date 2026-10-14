@@ -14,9 +14,9 @@ function describeEntry(entry: ParsedEntry, today: string): string {
 }
 
 /**
- * Reads one message from a member, saves what it asks to record, and answers. Called from the
- * app's chat and from Telegram, so every row is written with the member's id spelled out: the
- * Telegram side has no signed-in user for the database to fill it in from.
+ * Reads one message from a member, saves what it asks to record, and answers. Every row is
+ * written with the member's id spelled out, so it does not depend on the database filling it
+ * in from whoever is signed in.
  */
 export async function handleChatMessage(
   ctx: AppContext,

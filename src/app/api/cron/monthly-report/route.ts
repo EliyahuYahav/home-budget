@@ -3,10 +3,9 @@
 // the later mornings only pick up what failed on an earlier one.
 import { monthOf, shiftMonth, todayISO } from "@/lib/dates";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
-import { isEmptyReport, renderReportEmail, renderReportText } from "@/lib/report";
+import { isEmptyReport, renderReportEmail } from "@/lib/report";
 import { collectReport } from "@/lib/report-data";
 import { createAdminClient, memberContext, sameSecret } from "@/lib/supabase/admin";
-import { isTelegramConfigured, sendTelegramMessage } from "@/lib/telegram";
 
 export const maxDuration = 60;
 
@@ -46,14 +45,6 @@ export async function GET(request: Request) {
         if (data.user?.email) addresses.push(data.user.email);
       }
       await sendEmail({ to: addresses, ...renderReportEmail(report) });
-
-      if (isTelegramConfigured()) {
-        const { data: chats } = await admin.from("telegram_chats").select("chat_id").eq("household_id", id);
-        for (const chat of chats ?? []) {
-          // The email is the report; a chat that cannot be reached does not undo it.
-          await sendTelegramMessage(chat.chat_id as number, renderReportText(report)).catch(() => {});
-        }
-      }
       counts.sent += 1;
     } catch (cause) {
       console.error("monthly report failed for a household", cause);

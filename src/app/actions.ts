@@ -3,17 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import Anthropic from "@anthropic-ai/sdk";
-import { randomBytes } from "node:crypto";
 import { handleChatMessage } from "@/lib/chat";
 import { requireContext } from "@/lib/data";
 import { isValidDate, monthLabel, monthOf, shiftMonth, todayISO } from "@/lib/dates";
-import { isEmailConfigured, sendEmail, siteUrl } from "@/lib/email";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { isEmptyReport, renderReportEmail } from "@/lib/report";
 import { collectReport } from "@/lib/report-data";
 import { isSecretBoxConfigured, sealSecret } from "@/lib/secret-box";
 import { createClient } from "@/lib/supabase/server";
 import { payeeKey } from "../../sync/payee.mjs";
-import { botUsername, isTelegramConfigured, registerWebhook } from "@/lib/telegram";
 import type { CategoryKind, ChatMessage } from "@/lib/types";
 
 export interface FormState {
@@ -150,59 +148,6 @@ export async function sendReportNow(): Promise<FormState> {
     return { error: "המייל לא נשלח. נסו שוב בעוד כמה דקות." };
   }
   return { message: `הדוח של ${monthLabel(report.month)} נשלח אליך.` };
-}
-
-// --------------------------------------------------------------------------
-// Telegram
-// --------------------------------------------------------------------------
-
-export interface TelegramLinkState {
-  error?: string;
-  /** Opens the bot with a one-time code that links the chat to whoever asked. */
-  link?: string;
-}
-
-export async function createTelegramLink(): Promise<TelegramLinkState> {
-  const ctx = await requireContext();
-  if (!isTelegramConfigured()) return { error: "הבוט בטלגרם עוד לא הוגדר באתר הזה." };
-
-  const code = randomBytes(16).toString("hex");
-  const { error } = await ctx.supabase
-    .from("telegram_link_codes")
-    .insert({ code, household_id: ctx.household.id, user_id: ctx.userId });
-  if (error) return { error: `לא הצלחתי ליצור קישור: ${error.message}` };
-  try {
-    return { link: `https://t.me/${await botUsername()}?start=${code}` };
-  } catch (cause) {
-    console.error("telegram getMe failed", cause);
-    return { error: "טלגרם לא ענה. נסו שוב בעוד רגע." };
-  }
-}
-
-export async function disconnectTelegram() {
-  const ctx = await requireContext();
-  const { error } = await ctx.supabase.from("telegram_chats").delete().eq("user_id", ctx.userId);
-  if (error) throw new Error(error.message);
-  revalidateApp();
-}
-
-/**
- * Points the bot at this site. The address comes from the server's own settings and never
- * from the request, so whoever presses this cannot send the bot's messages anywhere else.
- */
-export async function connectTelegramWebhook(): Promise<FormState> {
-  await requireContext();
-  if (!isTelegramConfigured()) return { error: "חסר TELEGRAM_BOT_TOKEN או SECRETS_KEY בהגדרות השרת." };
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { error: "חסר SUPABASE_SERVICE_ROLE_KEY בהגדרות השרת." };
-  const site = siteUrl();
-  if (!site.startsWith("https://")) return { error: "כתובת האתר לא ידועה לשרת (SITE_URL), או שהיא לא מאובטחת." };
-  try {
-    await registerWebhook(`${site}/api/telegram/webhook`);
-  } catch (cause) {
-    console.error("telegram setWebhook failed", cause);
-    return { error: "טלגרם דחה את החיבור. בדקו את הטוקן של הבוט." };
-  }
-  return { message: `הבוט מחובר ל־${site}.` };
 }
 
 // --------------------------------------------------------------------------

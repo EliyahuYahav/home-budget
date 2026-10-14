@@ -1,8 +1,7 @@
-// A Supabase client that row level security does not apply to. It exists for the two places
-// where the server acts with no member signed in: the monthly report and the Telegram
-// webhook. Each of them checks a secret of its own before it gets here, and every query made
-// with this client names the household it is for. Never import it from a page, an action or
-// anything a browser can reach.
+// A Supabase client that row level security does not apply to. It exists for the one place
+// where the server acts with no member signed in: the scheduled monthly report, which checks
+// a secret of its own before it gets here. Every query made with this client names the
+// household it is for. Never import it from a page, an action or anything a browser can reach.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { timingSafeEqual } from "node:crypto";
 import type { AppContext } from "../data";
@@ -16,8 +15,8 @@ export function createAdminClient(): SupabaseClient | null {
 }
 
 /**
- * The context of one member, for code written for a signed-in member (reading the month,
- * the chat). null when they are no longer in a household.
+ * The context of one member, for code written for a signed-in member (reading the month).
+ * null when they are no longer in a household.
  */
 export async function memberContext(admin: SupabaseClient, userId: string): Promise<AppContext | null> {
   const { data: member } = await admin
