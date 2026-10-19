@@ -54,6 +54,7 @@ export async function getCategories(ctx: AppContext): Promise<Category[]> {
     fund_opening: num(c.fund_opening),
     goal_amount: c.goal_amount == null ? null : num(c.goal_amount),
     goal_due: c.goal_due ?? null,
+    paid_in_cash: c.paid_in_cash ?? false,
   })) as Category[];
 }
 
@@ -211,10 +212,12 @@ export async function getMonthData(ctx: AppContext, month: string) {
     getFundHistory(ctx, categories, month),
     getGoalSaved(ctx, categories, month),
   ]);
-  // For every total and summary: cash purchases come off the cash withdrawals.
+  // For every total and summary: what cash paid for comes off the cash withdrawals.
+  const settled = settleCash(transactions, categories);
   return {
     categories,
-    transactions: settleCash(transactions, categories).transactions,
+    transactions: settled.transactions,
+    cash: settled.wallet,
     recurringIncomes,
     fundHistory,
     goalSaved,

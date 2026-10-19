@@ -254,7 +254,7 @@ export function TransactionList({
                           {covered > 0 && (
                             <span className="block text-sm text-muted">
                               מתוך <span className="num">{formatILS(t.amount)}</span>,{" "}
-                              <span className="num">{formatILS(covered)}</span> נרשמו כקניות במזומן
+                              <span className="num">{formatILS(covered)}</span> כבר מפורטים כתשלומים במזומן
                             </span>
                           )}
                         </span>

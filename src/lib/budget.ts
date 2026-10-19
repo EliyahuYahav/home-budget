@@ -156,38 +156,89 @@ export function isCashCategory(category: Category): boolean {
   return category.kind === "expense" && category.name.includes("מזומן");
 }
 
+/** Where a month's cash withdrawals went. */
+export interface CashWallet {
+  /** Everything taken out of the bank in cash. */
+  withdrawn: number;
+  /** Bills paid in cash, taken off the withdrawals without being written down. */
+  bills: { categoryId: string; name: string; amount: number }[];
+  /** Purchases written down as paid in cash, as far as the withdrawals cover them. */
+  purchases: number;
+  /** What nobody said where it went. It still counts as spending, under the cash category. */
+  undocumented: number;
+}
+
 /**
- * Cash is counted as spent when it is withdrawn. A purchase later written down as paid in
- * cash is the same money, so its amount comes off the month's withdrawals, oldest first,
- * and the purchase keeps its own category. A withdrawal used up this way drops out.
- * Cash purchases beyond what was withdrawn stay as they are: that cash came from elsewhere.
+ * A withdrawal is not spending: it only moves money from the bank to the wallet. The spending
+ * is what the cash pays for, so:
  *
- * `covered` says how much of each withdrawal (by transaction id) was taken off.
+ * - A bill marked as paid in cash (rent) takes its monthly amount from the month's
+ *   withdrawals by itself, as an expense in its own category, unless something was already
+ *   written down under it this month. Without enough withdrawn yet, it takes what there is,
+ *   and the rest stays reserved as an unpaid bill.
+ * - A purchase written down as paid in cash takes its amount off the withdrawals too.
+ *   Beyond what was withdrawn it stays as it is: that cash came from elsewhere.
+ * - Whatever is left of the withdrawals stays under the cash category, still counted as
+ *   spending, so money nobody accounted for does not vanish from the month.
+ *
+ * Withdrawals are used oldest first. `covered` says how much of each (by id) was taken off.
  */
 export function settleCash(
   transactions: Transaction[],
   categories: Category[],
-): { transactions: Transaction[]; covered: Map<string, number> } {
+): { transactions: Transaction[]; covered: Map<string, number>; wallet: CashWallet } {
   const covered = new Map<string, number>();
   const cashIds = new Set(categories.filter(isCashCategory).map((c) => c.id));
   const isWithdrawal = (t: Transaction) =>
     t.type === "expense" && t.category_id !== null && cashIds.has(t.category_id);
 
-  let pool = 0;
-  for (const t of transactions) {
-    if (t.type === "expense" && t.paid_in_cash && !isWithdrawal(t)) pool += t.amount;
-  }
-  if (cashIds.size === 0 || pool === 0) return { transactions, covered };
-
   const withdrawals = transactions
     .filter(isWithdrawal)
     .sort((a, b) => a.occurred_on.localeCompare(b.occurred_on) || a.created_at.localeCompare(b.created_at));
+  const withdrawn = round2(withdrawals.reduce((sum, w) => sum + w.amount, 0));
+  const wallet: CashWallet = { withdrawn, bills: [], purchases: 0, undocumented: withdrawn };
+
+  // Bills first: they are what the cash is drawn for.
+  let available = withdrawn;
+  const billRows: Transaction[] = [];
+  for (const category of categories) {
+    if (!category.paid_in_cash || category.archived || category.kind !== "expense" || isCashCategory(category)) continue;
+    if (category.monthly_budget <= 0 || available <= 0) continue;
+    if (transactions.some((t) => t.type === "expense" && t.category_id === category.id)) continue;
+    const amount = round2(Math.min(category.monthly_budget, available));
+    available = round2(available - amount);
+    wallet.bills.push({ categoryId: category.id, name: category.name, amount });
+    billRows.push({
+      id: `cash-bill:${category.id}`,
+      user_id: null,
+      type: "expense",
+      amount,
+      category_id: category.id,
+      description: `${category.name} (במזומן)`,
+      occurred_on: withdrawals[0].occurred_on,
+      source: "manual",
+      paid_in_cash: true,
+      created_at: withdrawals[0].created_at,
+    });
+  }
+
+  let purchases = 0;
+  for (const t of transactions) {
+    if (t.type === "expense" && t.paid_in_cash && !isWithdrawal(t)) purchases += t.amount;
+  }
+  const billsTotal = withdrawn - available;
+  let pool = round2(billsTotal + purchases);
+  if (cashIds.size === 0 || pool === 0) return { transactions, covered, wallet };
+
   for (const withdrawal of withdrawals) {
     if (pool <= 0) break;
     const taken = Math.min(withdrawal.amount, pool);
     covered.set(withdrawal.id, round2(taken));
     pool = round2(pool - taken);
   }
+  const coveredTotal = [...covered.values()].reduce((sum, n) => sum + n, 0);
+  wallet.purchases = round2(coveredTotal - billsTotal);
+  wallet.undocumented = round2(withdrawn - coveredTotal);
 
   const settled: Transaction[] = [];
   for (const t of transactions) {
@@ -195,7 +246,7 @@ export function settleCash(
     if (taken === undefined) settled.push(t);
     else if (t.amount - taken > 0.004) settled.push({ ...t, amount: round2(t.amount - taken) });
   }
-  return { transactions: settled, covered };
+  return { transactions: [...settled, ...billRows], covered, wallet };
 }
 
 /** Share of a budget at which a category is flagged before it is exceeded. */
@@ -211,9 +262,12 @@ export function summarizeMonth(input: {
   fundHistory?: FundCharge[];
   /** Put aside before this month in each savings line that has a goal, by category id. */
   goalSaved?: Record<string, number>;
+  /** Shown beside the summary; the sums above already account for it. */
+  cash?: CashWallet;
 }): MonthSummary {
   const { month, today, transactions, recurringIncomes } = input;
-  const categories = input.categories.filter((c) => !c.archived);
+  // The cash category holds what is left of the withdrawals: spending, but not a budget line.
+  const categories = input.categories.filter((c) => !c.archived && !isCashCategory(c));
   const byId = new Map(input.categories.map((c) => [c.id, c]));
 
   const spentByCategory = new Map<string, number>();

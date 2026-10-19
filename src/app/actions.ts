@@ -291,6 +291,10 @@ export async function saveCategory(form: FormData) {
     fund = { ...fund, goal_amount: null, goal_due: null };
   }
 
+  // Written only when it is on or was on, for a database without the column yet.
+  const paidInCash = kind === "expense" && form.get("paidInCash") === "on";
+  const cash = paidInCash || current.paid_in_cash ? { paid_in_cash: paidInCash } : {};
+
   const { error } = await ctx.supabase
     .from("categories")
     .update({
@@ -300,6 +304,7 @@ export async function saveCategory(form: FormData) {
       is_fixed: kind === "expense" && form.get("isFixed") === "on",
       archived: form.get("archived") === "on",
       ...fund,
+      ...cash,
     })
     .eq("id", text(form, "id"))
     .eq("household_id", ctx.household.id);

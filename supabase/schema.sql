@@ -50,6 +50,8 @@ create table if not exists public.categories (
   -- day of the month it is wanted by. Both are optional.
   goal_amount    numeric(12, 2) check (goal_amount > 0),
   goal_due       date,
+  -- A bill paid in cash (rent): each month its amount is taken from the cash withdrawals.
+  paid_in_cash   boolean not null default false,
   unique (household_id, name)
 );
 
@@ -60,6 +62,7 @@ alter table public.categories
 alter table public.categories
   add column if not exists goal_amount numeric(12, 2) check (goal_amount > 0);
 alter table public.categories add column if not exists goal_due date;
+alter table public.categories add column if not exists paid_in_cash boolean not null default false;
 alter table public.categories drop constraint if exists categories_kind_check;
 alter table public.categories
   add constraint categories_kind_check check (kind in ('expense', 'saving', 'fund'));

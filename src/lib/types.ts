@@ -9,6 +9,8 @@ export interface Category {
   monthly_budget: number;
   sort_order: number;
   archived: boolean;
+  /** A bill paid in cash (rent): its amount comes off the month's cash withdrawals by itself. See settleCash. */
+  paid_in_cash?: boolean;
   /** For a fund: the first day of the month it began (YYYY-MM-DD). */
   fund_start?: string | null;
   /** For a fund: what was already in it when it began. For a savings goal: what was saved before the app. */

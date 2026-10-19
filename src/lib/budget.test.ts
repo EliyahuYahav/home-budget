@@ -364,3 +364,53 @@ describe("savings goals", () => {
     expect(plain.categories.find((c) => c.category.id === "holiday")!.goal).toBeUndefined();
   });
 });
+
+describe("the cash wallet", () => {
+  const cash = category("cash", { name: "מזומן", monthly_budget: 4000 });
+  const rent = category("rent", { is_fixed: true, monthly_budget: 2700, paid_in_cash: true });
+  const cats = [category("groceries", { monthly_budget: 1800 }), rent, cash];
+
+  it("pays a cash bill from the withdrawals by itself, and leaves the rest undocumented", () => {
+    const withdrawal = tx(3000, "cash", { occurred_on: "2026-10-02" });
+    const { transactions, wallet } = settleCash([withdrawal], cats);
+    expect(transactions.map((t) => [t.category_id, t.amount])).toEqual([
+      ["cash", 300],
+      ["rent", 2700],
+    ]);
+    expect(wallet).toEqual({
+      withdrawn: 3000,
+      bills: [{ categoryId: "rent", name: "rent", amount: 2700 }],
+      purchases: 0,
+      undocumented: 300,
+    });
+  });
+
+  it("takes only what was withdrawn, and keeps the rest of the bill reserved", () => {
+    const { transactions } = settleCash([tx(1000, "cash")], cats);
+    const summary = summarizeMonth({ month: "2026-10", today: "2026-10-10", categories: cats, transactions, recurringIncomes: [] });
+    expect(summary.categories.find((c) => c.category.id === "rent")!.spent).toBe(1000);
+    expect(summary.fixedReserve).toBe(1700);
+    // Nothing withdrawn yet: the rent is simply unpaid.
+    expect(settleCash([], cats).wallet.bills).toEqual([]);
+  });
+
+  it("leaves a bill alone once something was written down under it", () => {
+    const { wallet } = settleCash([tx(3000, "cash"), tx(2700, "rent")], cats);
+    expect(wallet.bills).toEqual([]);
+    expect(wallet.undocumented).toBe(3000);
+  });
+
+  it("covers the bill before cash purchases, and splits the rest", () => {
+    const { wallet } = settleCash([tx(3000, "cash"), tx(200, "groceries", { paid_in_cash: true })], cats);
+    expect(wallet).toMatchObject({ withdrawn: 3000, purchases: 200, undocumented: 100 });
+  });
+
+  it("keeps the cash category out of the budget, but its leftover in the spending", () => {
+    const { transactions } = settleCash([tx(3000, "cash")], cats);
+    const summary = summarizeMonth({ month: "2026-10", today: "2026-10-10", categories: cats, transactions, recurringIncomes: [] });
+    expect(summary.categories.map((c) => c.category.id)).not.toContain("cash");
+    expect(summary.spent).toBe(3000);
+    // The cash category's old budget is not part of the plan either.
+    expect(summary.income).toBe(1800 + 2700);
+  });
+});

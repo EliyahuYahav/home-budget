@@ -3,6 +3,7 @@ import { ChevronDown, PlusIcon } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { Card, Money, MonthNav, PageTitle, ProgressBar } from "@/components/ui";
 import { summarizeMonth, type CategoryStatus, type GoalStatus } from "@/lib/budget";
+import { CashCard } from "@/components/cash-card";
 import { getMonthData, requireContext } from "@/lib/data";
 import { isValidMonth, monthLabel, monthOf, todayISO } from "@/lib/dates";
 
@@ -141,7 +142,7 @@ function CategoryRow({ row }: { row: CategoryStatus }) {
         {/* A new form whenever the saved values change: after a save React resets each field
             to the default it was first given, which would show the old choice again. */}
         <form
-          key={`${category.name}|${category.monthly_budget}|${category.kind}|${category.is_fixed}|${category.fund_opening}|${category.goal_amount}|${category.goal_due}`}
+          key={`${category.name}|${category.monthly_budget}|${category.kind}|${category.is_fixed}|${category.fund_opening}|${category.goal_amount}|${category.goal_due}|${category.paid_in_cash}`}
           action={saveCategory}
           className="grid grid-cols-2 gap-3 px-3.5 pb-3.5"
         >
@@ -215,11 +216,27 @@ function CategoryRow({ row }: { row: CategoryStatus }) {
               <option value="fund">קרן להוצאה שנתית (מפרישים כל חודש)</option>
             </select>
           </label>
-          {!isFund && (
-            <label className="col-span-2 flex items-center gap-2.5">
-              <input type="checkbox" className="size-5 accent-accent" name="isFixed" defaultChecked={category.is_fixed} />
-              חשבון קבוע (הסכום נשמר בצד עד שהוא משולם)
-            </label>
+          {!isFund && !saving && (
+            <>
+              <label className="col-span-2 flex items-center gap-2.5">
+                <input type="checkbox" className="size-5 accent-accent" name="isFixed" defaultChecked={category.is_fixed} />
+                חשבון קבוע (הסכום נשמר בצד עד שהוא משולם)
+              </label>
+              <label className="col-span-2 flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-5 shrink-0 accent-accent"
+                  name="paidInCash"
+                  defaultChecked={category.paid_in_cash ?? false}
+                />
+                <span>
+                  משולם במזומן
+                  <span className="block text-sm text-muted">
+                    כל חודש הסכום יורד לבד ממשיכות הכספומט ונרשם כאן, בלי לרשום אותו.
+                  </span>
+                </span>
+              </label>
+            </>
           )}
           <label className="col-span-2 flex items-center gap-2.5">
             <input type="checkbox" className="size-5 accent-accent" name="archived" />
@@ -330,6 +347,8 @@ export default async function BudgetPage({ searchParams }: PageProps<"/budget">)
           </div>
         )}
       </Card>
+
+      {data.cash.withdrawn > 0 && <CashCard wallet={data.cash} />}
 
       <Group
         title="חיסכון קודם"
