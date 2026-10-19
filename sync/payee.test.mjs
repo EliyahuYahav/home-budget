@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { learnCategories, payeeKey } from "./payee.mjs";
+import { isCashWithdrawal, learnCategories, payeeKey } from "./payee.mjs";
 
 describe("payeeKey", () => {
   it("is the same for a payee across installments, spacing and letter case", () => {
@@ -36,5 +36,20 @@ describe("learnCategories", () => {
       { description: "", category_id: "x" },
     ]);
     expect(learned.size).toBe(0);
+  });
+});
+
+describe("isCashWithdrawal", () => {
+  it("knows an ATM withdrawal as the bank prints it", () => {
+    expect(isCashWithdrawal("מש' מכספומט דיסקונט 10/09")).toBe(true);
+    expect(isCashWithdrawal("משיכת מזומן")).toBe(true);
+    expect(isCashWithdrawal("ATM LONDON")).toBe(true);
+  });
+
+  it("is not fooled by a card's monthly charge or a transfer", () => {
+    expect(isCashWithdrawal("חיוב לכרטיס ויזה 5241")).toBe(false);
+    expect(isCashWithdrawal("העברה ליהב דוד")).toBe(false);
+    expect(isCashWithdrawal("PAYBOX")).toBe(false);
+    expect(isCashWithdrawal(null)).toBe(false);
   });
 });

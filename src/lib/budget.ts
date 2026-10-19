@@ -1,3 +1,4 @@
+import { isCashWithdrawal } from "../../sync/payee.mjs";
 import { daysInMonth, daysLeftInMonth, monthOf, shiftMonth } from "./dates";
 import type { Category, RecurringIncome, Transaction } from "./types";
 
@@ -166,6 +167,13 @@ export interface CashWallet {
   purchases: number;
   /** What nobody said where it went. It still counts as spending, under the cash category. */
   undocumented: number;
+  /**
+   * Bank lines filed under the cash category that are not ATM withdrawals (a card's monthly
+   * charge, a transfer): money that never was cash, counted here by mistake.
+   */
+  misfiled: { count: number; amount: number; example: string };
+  /** ATM withdrawals from the bank filed somewhere other than the cash category. */
+  stray: { count: number; amount: number };
 }
 
 /**
@@ -196,7 +204,25 @@ export function settleCash(
     .filter(isWithdrawal)
     .sort((a, b) => a.occurred_on.localeCompare(b.occurred_on) || a.created_at.localeCompare(b.created_at));
   const withdrawn = round2(withdrawals.reduce((sum, w) => sum + w.amount, 0));
-  const wallet: CashWallet = { withdrawn, bills: [], purchases: 0, undocumented: withdrawn };
+  const misfiled = withdrawals.filter((w) => w.source === "bank" && !isCashWithdrawal(w.description));
+  const wallet: CashWallet = {
+    withdrawn,
+    bills: [],
+    purchases: 0,
+    undocumented: withdrawn,
+    misfiled: {
+      count: misfiled.length,
+      amount: round2(misfiled.reduce((sum, w) => sum + w.amount, 0)),
+      example: misfiled[0]?.description ?? "",
+    },
+    stray: { count: 0, amount: 0 },
+  };
+  for (const t of transactions) {
+    if (t.type === "expense" && t.source === "bank" && !isWithdrawal(t) && isCashWithdrawal(t.description)) {
+      wallet.stray.count += 1;
+      wallet.stray.amount = round2(wallet.stray.amount + t.amount);
+    }
+  }
 
   // Bills first: they are what the cash is drawn for.
   let available = withdrawn;

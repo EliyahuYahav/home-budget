@@ -1,3 +1,4 @@
+import { isCashCategory } from "./budget";
 import { daysInMonth, monthOf } from "./dates";
 import type { Category, RecurringIncome, Transaction } from "./types";
 
@@ -58,7 +59,10 @@ export interface CategoryTotal {
   share: number;
 }
 
-/** Where one month's spending went, largest first. Savings are not spending. */
+/**
+ * Where one month's spending went, largest first. Savings are not spending. What is left in
+ * the cash category is cash nobody said where it went, and is named so.
+ */
 export function categoryTotals(transactions: Transaction[], categories: Category[]): CategoryTotal[] {
   const byId = new Map(categories.map((c) => [c.id, c]));
   const sums = new Map<string | null, number>();
@@ -73,7 +77,7 @@ export function categoryTotals(transactions: Transaction[], categories: Category
   return [...sums.entries()]
     .map(([id, spent]) => ({
       id,
-      name: id ? byId.get(id)!.name : "ללא קטגוריה",
+      name: !id ? "ללא קטגוריה" : isCashCategory(byId.get(id)!) ? "מזומן לא מפורט" : byId.get(id)!.name,
       spent: round2(spent),
       share: total > 0 ? spent / total : 0,
     }))

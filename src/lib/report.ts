@@ -1,6 +1,6 @@
 // The monthly report: what a household's month looked like, as an email and as a short
 // message. buildReport gathers the numbers; the render functions only lay them out.
-import { formatILS, isCashCategory, summarizeMonth, type FundCharge } from "./budget";
+import { formatILS, summarizeMonth, type FundCharge } from "./budget";
 import { monthLabel, shiftMonth, shortDate } from "./dates";
 import { averageMonth, categoryTotals, changeFrom, monthlyTotals, topPayees, type Averages, type PayeeTotal } from "./trends";
 import type { Category, RecurringIncome, Transaction } from "./types";
@@ -90,7 +90,6 @@ export function buildReport(input: {
   const shown = byCategory.slice(0, CATEGORIES_SHOWN);
   const categoryName = new Map(categories.map((c) => [c.id, c.name]));
   const savingIds = new Set(categories.filter((c) => c.kind === "saving").map((c) => c.id));
-  const cashIds = new Set(categories.filter(isCashCategory).map((c) => c.id));
 
   return {
     month,
@@ -109,13 +108,12 @@ export function buildReport(input: {
     categories: shown.map((c) => {
       const row = c.id ? statusByName.get(c.name) : undefined;
       const budget = row?.category.monthly_budget ?? 0;
-      // What is left under the cash category is cash nobody said where it went.
-      const name = c.id && cashIds.has(c.id) ? "מזומן לא מפורט" : c.name;
-      return { name, spent: c.spent, budget, status: row && budget > 0 ? row.status : "none" };
+      return { name: c.name, spent: c.spent, budget, status: row && budget > 0 ? row.status : "none" };
     }),
     otherSpent: byCategory.slice(CATEGORIES_SHOWN).reduce((sum, c) => sum + c.spent, 0),
     over: summary.categories
-      .filter((c) => c.status === "over" && !c.fund && c.category.monthly_budget > 0)
+      // A few shekels over is noise next to the real overruns.
+      .filter((c) => c.status === "over" && !c.fund && c.category.monthly_budget > 0 && c.spent - c.category.monthly_budget >= 10)
       .map((c) => ({ name: c.category.name, spent: c.spent, budget: c.category.monthly_budget }))
       .sort((a, b) => b.spent - b.budget - (a.spent - a.budget)),
     goals: summary.categories

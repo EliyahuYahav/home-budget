@@ -29,3 +29,11 @@ export function learnCategories(rows) {
   }
   return learned;
 }
+
+/**
+ * A bank line that takes cash out of an ATM ("מש' מכספומט דיסקונט 10/09"). Only these belong in
+ * the cash category: a card's monthly charge or a transfer is not cash, whatever it was filed as.
+ */
+export function isCashWithdrawal(description) {
+  return /כספומט|משיכת מזומן|משיכה במזומן|\bATM\b/i.test(String(description ?? ""));
+}

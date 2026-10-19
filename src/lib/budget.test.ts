@@ -382,6 +382,8 @@ describe("the cash wallet", () => {
       bills: [{ categoryId: "rent", name: "rent", amount: 2700 }],
       purchases: 0,
       undocumented: 300,
+      misfiled: { count: 0, amount: 0, example: "" },
+      stray: { count: 0, amount: 0 },
     });
   });
 
@@ -412,5 +414,21 @@ describe("the cash wallet", () => {
     expect(summary.spent).toBe(3000);
     // The cash category's old budget is not part of the plan either.
     expect(summary.income).toBe(1800 + 2700);
+  });
+
+  it("points out bank lines filed as cash that are not ATM withdrawals", () => {
+    const card = tx(5324, "cash", { source: "bank", description: "חיוב לכרטיס ויזה 5241" });
+    const atm = tx(3200, "cash", { source: "bank", description: "מש' מכספומט דיסקונט 10/09" });
+    const byHand = tx(500, "cash", { source: "chat", description: "משכתי" });
+    expect(settleCash([card, atm, byHand], cats).wallet.misfiled).toEqual({
+      count: 1,
+      amount: 5324,
+      example: "חיוב לכרטיס ויזה 5241",
+    });
+  });
+
+  it("points out ATM withdrawals filed somewhere else", () => {
+    const elsewhere = tx(400, null, { source: "bank", description: "מש' מכספומט דיסקונט 02/10" });
+    expect(settleCash([elsewhere], cats).wallet.stray).toEqual({ count: 1, amount: 400 });
   });
 });

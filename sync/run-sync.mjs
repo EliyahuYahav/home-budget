@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { createScraper } from "israeli-bank-scrapers-core";
 import { categorize } from "./categorize.mjs";
-import { learnCategories, payeeKey } from "./payee.mjs";
+import { isCashWithdrawal, learnCategories, payeeKey } from "./payee.mjs";
 import { MATCH_DAYS, israelDate, planImport, toCandidates } from "./plan.mjs";
 
 const DEFAULT_DAYS_BACK = 30;
@@ -273,8 +273,10 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     );
   }
 
-  // Only expenses are filed under a category. A payee the household has filed before goes
-  // where they put it last time; Claude is asked only about the rest.
+  // Only expenses are filed under a category. An ATM withdrawal goes to the cash category, and
+  // nothing else ever does: that category is the wallet, not a kind of spending. A payee the
+  // household has filed before goes where they put it last time; Claude is asked only about
+  // the rest, and is not offered the cash category at all.
   const expenses = plan.inserts.filter((candidate) => candidate.type === "expense");
   const { data: filed, error: filedError } = await supabase
     .from("transactions")
@@ -287,21 +289,31 @@ export async function runSync({ supabase, householdId, sources, chrome, since, d
     .limit(PAGE);
   if (filedError) throw new Error(filedError.message);
   const learned = learnCategories(filed);
-  const usable = new Set(categories.map((c) => c.id));
+  const cashCategory = categories.find((c) => c.name.includes("מזומן"));
+  const filable = categories.filter((c) => c !== cashCategory);
+  const usable = new Set(filable.map((c) => c.id));
   const categoryOf = new Map();
   const unknown = [];
+  let withdrawals = 0;
   for (const candidate of expenses) {
+    if (isCashWithdrawal(candidate.description)) {
+      categoryOf.set(candidate, cashCategory?.id ?? null);
+      withdrawals += 1;
+      continue;
+    }
     const before = learned.get(payeeKey(candidate.description));
     if (before && usable.has(before)) categoryOf.set(candidate, before);
     else unknown.push(candidate);
   }
-  const fromBefore = categoryOf.size;
-  const guessed = await categorize(unknown, categories, log);
+  const fromBefore = categoryOf.size - withdrawals;
+  const guessed = await categorize(unknown, filable, log);
   unknown.forEach((candidate, i) => categoryOf.set(candidate, guessed[i]));
   const categoryIds = plan.inserts.map((candidate) => categoryOf.get(candidate) ?? null);
   const categoryName = new Map(categories.map((c) => [c.id, c.name]));
   if (expenses.length > 0) {
-    log(`Categories: ${fromBefore} as you filed the same payee before, ${unknown.length} asked of Claude.`);
+    log(
+      `Categories: ${withdrawals} cash withdrawal(s), ${fromBefore} as you filed the same payee before, ${unknown.length} asked of Claude.`,
+    );
   }
 
   for (const [i, candidate] of plan.inserts.entries()) {

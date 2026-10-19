@@ -11,7 +11,9 @@ import { isEmptyReport, renderReportEmail } from "@/lib/report";
 import { collectReport } from "@/lib/report-data";
 import { isSecretBoxConfigured, sealSecret } from "@/lib/secret-box";
 import { createClient } from "@/lib/supabase/server";
-import { payeeKey } from "../../sync/payee.mjs";
+import { isCashWithdrawal, payeeKey } from "../../sync/payee.mjs";
+import { isCashCategory } from "@/lib/budget";
+import { getCategories } from "@/lib/data";
 import type { CategoryKind, ChatMessage } from "@/lib/types";
 
 export interface FormState {
@@ -226,6 +228,45 @@ async function fileSamePayee(ctx: Awaited<ReturnType<typeof requireContext>>, de
       .eq("household_id", ctx.household.id);
     if (updateError) throw new Error(updateError.message);
   }
+}
+
+/**
+ * Puts the bank's lines right about cash, in every month: what is not an ATM withdrawal leaves
+ * the cash category (it becomes uncategorized, to be filed where it belongs), and an ATM
+ * withdrawal filed anywhere else moves into it. Lines written by hand are left alone.
+ */
+export async function moveMisfiledCash() {
+  const ctx = await requireContext();
+  const cash = (await getCategories(ctx)).filter(isCashCategory);
+  if (cash.length === 0) return;
+  const cashIds = new Set(cash.map((c) => c.id));
+  const { data, error } = await ctx.supabase
+    .from("transactions")
+    .select("id, description, category_id")
+    .eq("household_id", ctx.household.id)
+    .eq("source", "bank")
+    .eq("type", "expense")
+    .limit(5000);
+  if (error) throw new Error(error.message);
+
+  const rows = data ?? [];
+  const out = rows.filter((r) => r.category_id && cashIds.has(r.category_id) && !isCashWithdrawal(r.description));
+  const into = rows.filter((r) => !(r.category_id && cashIds.has(r.category_id)) && isCashWithdrawal(r.description));
+  const moves: [string[], string | null][] = [
+    [out.map((r) => r.id as string), null],
+    [into.map((r) => r.id as string), cash[0].id],
+  ];
+  for (const [ids, categoryId] of moves) {
+    for (let start = 0; start < ids.length; start += 100) {
+      const { error: updateError } = await ctx.supabase
+        .from("transactions")
+        .update({ category_id: categoryId })
+        .in("id", ids.slice(start, start + 100))
+        .eq("household_id", ctx.household.id);
+      if (updateError) throw new Error(updateError.message);
+    }
+  }
+  revalidateApp();
 }
 
 export async function deleteTransaction(form: FormData) {

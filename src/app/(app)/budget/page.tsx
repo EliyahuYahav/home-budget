@@ -348,7 +348,7 @@ export default async function BudgetPage({ searchParams }: PageProps<"/budget">)
         )}
       </Card>
 
-      {data.cash.withdrawn > 0 && <CashCard wallet={data.cash} />}
+      {(data.cash.withdrawn > 0 || data.cash.stray.count > 0) && <CashCard wallet={data.cash} />}
 
       <Group
         title="חיסכון קודם"
