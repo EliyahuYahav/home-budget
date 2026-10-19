@@ -116,7 +116,7 @@ schtasks /Create /TN HomeBudgetAgent /SC ONLOGON /TR "\"D:\self projects\home-bu
 2. יוצרים מפתח (SMTP & API → API Keys), ומגדירים `BREVO_API_KEY` ו־`REPORT_FROM_EMAIL` (הכתובת שאומתה).
 3. מגדירים `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings → API keys) ו־`CRON_SECRET` (מחרוזת אקראית ארוכה).
 
-תוכן הדוח עובר דרך Brevo בדרך לתיבה. הוא לא טוען תמונות או קוד מבחוץ, והקישור היחיד בו הוא לאפליקציה.
+תוכן הדוח עובר דרך Brevo בדרך לתיבה. הדוח עצמו לא טוען תמונות או קוד מבחוץ, והקישור היחיד בו הוא לאפליקציה. אבל Brevo מוסיפה בדרך תמונה שקופה שמדווחת לה מתי המייל נפתח, ומעבירה את הקישור דרך השרת שלה כדי לספור לחיצות. אם אפשר לכבות את זה בחשבון (Transactional → Settings), כדאי.
 
 ## אבטחה
 
