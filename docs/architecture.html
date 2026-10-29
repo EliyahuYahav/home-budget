@@ -1,0 +1,828 @@
+<title>איך בנוי תקציב הבית</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&family=Karantina:wght@400;700&display=swap">
+<style>
+/* Layout: one reading column, an engineering notebook. ADRs as ruled records,
+   C4 diagrams and comparison tables scroll inside their own boxes on a phone. */
+:root {
+  --bg: #f7f4f2;
+  --paper: #ffffff;
+  --ink: #25233f;
+  --muted: #65637f;
+  --line: #e3dfea;
+  --accent: #5a5cd0;
+  --accent-soft: #e9e8fb;
+  --coral: #c9604f;
+  --coral-soft: #fbe3dc;
+  --sky-soft: #dceaf8;
+  --good: #23805c;
+  --good-soft: #ddf1e8;
+  --warn: #a2650f;
+  --warn-soft: #fbeed8;
+  --hero-a: #fbd3c4;
+  --hero-b: #dcd5f7;
+  --hero-c: #c9def6;
+  --font-display: "Karantina", "Heebo", "Arial Narrow", sans-serif;
+  --font-body: "Heebo", "Segoe UI", "Arial", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17162a; --paper: #211f3a; --ink: #efedf8; --muted: #a9a6c6; --line: #36345c;
+    --accent: #a3a5ff; --accent-soft: #2c2b55; --coral: #f29c8c; --coral-soft: #3d2940;
+    --sky-soft: #1d3350; --good: #5fcba0; --good-soft: #17332c; --warn: #e6ad52; --warn-soft: #33290f;
+    --hero-a: #5a3550; --hero-b: #3b3880; --hero-c: #254a75;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17162a; --paper: #211f3a; --ink: #efedf8; --muted: #a9a6c6; --line: #36345c;
+  --accent: #a3a5ff; --accent-soft: #2c2b55; --coral: #f29c8c; --coral-soft: #3d2940;
+  --sky-soft: #1d3350; --good: #5fcba0; --good-soft: #17332c; --warn: #e6ad52; --warn-soft: #33290f;
+  --hero-a: #5a3550; --hero-b: #3b3880; --hero-c: #254a75;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16.5px; line-height: 1.7; }
+.wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 72px;
+}
+code {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: var(--accent-soft);
+  padding: 0.05em 0.35em;
+  border-radius: 5px;
+  direction: ltr;
+  unicode-bidi: isolate;
+  overflow-wrap: anywhere;
+}
+.en { direction: ltr; unicode-bidi: isolate; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+.hero {
+  overflow: hidden;
+  margin: 24px 0 8px;
+  padding: 34px 28px 28px;
+  border-radius: 28px;
+  background:
+    radial-gradient(120% 90% at 100% 0%, var(--hero-a) 0%, transparent 60%),
+    radial-gradient(90% 90% at 0% 100%, var(--hero-c) 0%, transparent 65%),
+    var(--hero-b);
+}
+.hero .eyebrow { font-size: 14px; color: var(--muted); }
+.hero h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(54px, 11vw, 88px); line-height: 0.9; margin: 6px 0 14px; text-wrap: balance; }
+.hero p { margin: 0; max-width: 62ch; font-size: 17.5px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.chip { font-size: 13px; padding: 3px 12px; border-radius: 999px; background: color-mix(in srgb, var(--paper) 70%, transparent); }
+
+nav.toc { margin: 28px 0 8px; }
+nav.toc h2 { font-size: 15px; font-weight: 700; color: var(--muted); margin: 0 0 8px; font-family: var(--font-body); }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 20px; }
+nav.toc a { text-decoration: none; color: var(--ink); display: flex; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+nav.toc a span { color: var(--accent); font-variant-numeric: tabular-nums; min-width: 1.6em; }
+nav.toc a:hover { color: var(--accent); }
+
+section { margin-top: 56px; }
+.part { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+.part .num { font-family: var(--font-display); font-size: 30px; color: var(--accent); font-variant-numeric: tabular-nums; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: clamp(38px, 7.5vw, 52px); line-height: 1; margin: 0; text-wrap: balance; }
+h3 { font-size: 19px; margin: 30px 0 8px; text-wrap: balance; }
+.lead { font-size: 18px; max-width: 66ch; }
+p, li { max-width: 70ch; }
+.muted { color: var(--muted); }
+ul.plain { padding-right: 20px; padding-left: 0; }
+ul.plain li { margin: 6px 0; }
+
+/* ADR record */
+.adr { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; margin: 18px 0; }
+.adr header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 8px; }
+.adr .id { font-family: var(--font-mono); font-size: 13px; color: var(--accent); background: var(--accent-soft); padding: 1px 8px; border-radius: 6px; direction: ltr; }
+.adr h3 { margin: 0; flex: 1 1 260px; }
+.row { display: grid; grid-template-columns: 104px 1fr; gap: 4px 16px; padding: 8px 0; }
+.row + .row { border-top: 1px dashed var(--line); }
+.row > div { min-width: 0; }
+.row ul { margin: 0; padding-right: 18px; padding-left: 0; }
+.row li { margin: 3px 0; }
+.tag { font-size: 13px; font-weight: 700; padding-top: 3px; }
+.tag.ctx { color: var(--muted); }
+.tag.dec { color: var(--accent); }
+.tag.alt { color: var(--coral); }
+.tag.con { color: var(--good); }
+.tag.rev { color: var(--warn); }
+@media (max-width: 560px) { .row { grid-template-columns: 1fr; gap: 0; } .tag { padding-top: 0; } }
+.plus::before { content: "+ "; color: var(--good); font-weight: 700; }
+.minus::before { content: "− "; color: var(--coral); font-weight: 700; }
+ul.pm { list-style: none; padding: 0 !important; }
+
+/* Diagrams */
+figure { margin: 22px 0; }
+.diagram { background: var(--paper); border: 1px solid var(--line); border-radius: 20px; padding: 14px; overflow-x: auto; }
+.diagram svg { display: block; width: 100%; min-width: 700px; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; max-width: 70ch; }
+svg text { font-family: var(--font-body); }
+svg .rtl { direction: rtl; }
+.box { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+.box.ours { fill: var(--accent-soft); stroke: none; }
+.box.home { fill: var(--coral-soft); stroke: none; }
+.box.ext { fill: var(--sky-soft); stroke: none; }
+.box.user { fill: var(--good-soft); stroke: none; }
+.region { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 5; }
+.region-lbl { fill: var(--muted); font-size: 12px; font-weight: 700; }
+.t1 { fill: var(--ink); font-size: 15px; font-weight: 700; }
+.t2 { fill: var(--muted); font-size: 11.5px; font-family: var(--font-mono); }
+.edge { stroke: var(--accent); stroke-width: 1.7; fill: none; }
+.edge.home { stroke: var(--coral); }
+.lbl { fill: var(--ink); font-size: 11.5px; paint-order: stroke; stroke: var(--paper); stroke-width: 5px; stroke-linejoin: round; }
+.arrowhead { fill: var(--accent); }
+.arrowhead.home { fill: var(--coral); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; vertical-align: -1px; margin-left: 6px; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); margin: 16px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 620px; }
+th, td { text-align: right; padding: 10px 14px; vertical-align: top; }
+th { font-size: 13px; color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--line); }
+tr + tr td { border-top: 1px solid var(--line); }
+td.k { white-space: nowrap; font-weight: 700; }
+th.chosen, td.chosen { background: var(--accent-soft); }
+.y { color: var(--good); font-weight: 700; }
+.n { color: var(--coral); font-weight: 700; }
+.m { color: var(--warn); font-weight: 700; }
+
+/* Steps */
+ol.steps { list-style: none; padding: 0; margin: 14px 0; counter-reset: s; display: grid; gap: 10px; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: start; }
+ol.steps li::before { content: counter(s); width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 14px; display: grid; place-items: center; margin-top: 2px; }
+ol.steps li > div { min-width: 0; }
+
+.note { border-radius: 14px; padding: 12px 16px; margin: 16px 0; font-size: 15.5px; }
+.note.warn { background: var(--warn-soft); }
+.note.warn b { color: var(--warn); }
+.note.key { background: var(--accent-soft); }
+.note.key b { color: var(--accent); }
+
+pre.code { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; overflow-x: auto; direction: ltr; text-align: left; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; margin: 14px 0; }
+
+footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div dir="rtl" lang="he" class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">מסמך ארכיטקטורה למפתחים · תקציב הבית</div>
+  <h1>איך בנוי תקציב הבית</h1>
+  <p>המבנה של המערכת, הכוחות שעיצבו אותו, וההחלטות המרכזיות בפורמט ADR: הקשר, החלטה, חלופות שנשקלו ולמה נדחו, המחיר שמשלמים, ומתי כדאי לחזור להחלטה.</p>
+  <div class="meta">
+    <span class="chip">גרסה 0.15.0</span>
+    <span class="chip">29 באוקטובר 2026</span>
+    <span class="chip en">Next.js 16 · Supabase · Vercel · Node agent</span>
+  </div>
+</header>
+
+<nav class="toc" aria-label="תוכן">
+  <h2>תוכן</h2>
+  <ol>
+    <li><a href="#tldr"><span>1</span>בקצרה</a></li>
+    <li><a href="#drivers"><span>2</span>הכוחות שמעצבים את המערכת</a></li>
+    <li><a href="#containers"><span>3</span>קונטיינרים וגבולות אמון</a></li>
+    <li><a href="#supabase"><span>4</span>למה Supabase ולא שלוש שכבות קלאסיות</a></li>
+    <li><a href="#adrs"><span>5</span>רשומות החלטה (ADR)</a></li>
+    <li><a href="#runtime"><span>6</span>תרחישים בזמן ריצה</a></li>
+    <li><a href="#data"><span>7</span>מודל הנתונים</a></li>
+    <li><a href="#threats"><span>8</span>מודל איומים</a></li>
+    <li><a href="#quality"><span>9</span>מאפייני איכות ותוכנית יציאה</a></li>
+    <li><a href="#testing"><span>10</span>אסטרטגיית בדיקות</a></li>
+    <li><a href="#debt"><span>11</span>חוב טכני ומסלול התפתחות</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<section id="tldr">
+  <div class="part"><span class="num">1</span><h2>בקצרה</h2></div>
+  <p class="lead">מונוליט Next.js שרץ כ־serverless ב־Vercel, מעל Postgres מנוהל של Supabase. גבול האבטחה הוא המסד עצמו (Row Level Security), ולא שכבת ה־API. לצד זה יש worker שרץ ברשת הביתית, מושך עבודות מטבלה במסד ונכנס לבנקים עם דפדפן אמיתי.</p>
+  <ul class="plain">
+    <li><strong>שכבת התצוגה:</strong> React Server Components, עם קומפוננטות לקוח רק היכן שיש אינטראקציה. האתר מותקן בטלפון כ־PWA.</li>
+    <li><strong>שכבת האפליקציה:</strong> Server Actions (<code>src/app/actions.ts</code>) כנקודות הכניסה לכתיבה, ולוגיקה עסקית כפונקציות טהורות ב־<code>src/lib</code> (<code>budget.ts</code>, <code>trends.ts</code>), בלי I/O.</li>
+    <li><strong>שכבת הנתונים:</strong> Postgres עם 11 טבלאות, RLS על כל טבלה, ושלוש פונקציות <code>security definer</code> לפעולות שחוצות משקי בית (פתיחה והצטרפות).</li>
+    <li><strong>שני לקוחות של המסד:</strong> האתר, וה־sync agent. שניהם מתחברים כמשתמש רגיל עם JWT, ולכן אותן מדיניות RLS חלות על שניהם.</li>
+    <li><strong>מסלול אחד עוקף RLS:</strong> ה־cron של הדוח החודשי, עם <code>service_role</code>, שמבודד למודול אחד ומוגן בסוד.</li>
+  </ul>
+</section>
+
+<!-- 2 -->
+<section id="drivers">
+  <div class="part"><span class="num">2</span><h2>הכוחות שמעצבים את המערכת</h2></div>
+  <p class="lead">כל החלטה בהמשך נגזרת מהאילוצים ומסדר העדיפויות כאן. כשהם ישתנו, חלק מההחלטות יצטרכו להשתנות איתם.</p>
+
+  <h3>אילוצים</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>אילוץ</th><th>מה הוא אומר בפועל</th></tr></thead>
+      <tbody>
+        <tr><td class="k">צוות</td><td>מפתח אחד עם עוזר AI. אין מי שיתחזק שרתים, יעדכן מערכות הפעלה או יקום בלילה לתקלה.</td></tr>
+        <tr><td class="k">תקציב</td><td>קרוב לאפס. מסלולים חינמיים של Vercel ו־Supabase. העלות המשתנה היחידה היא Claude, וכל משק בית משלם עליה בעצמו.</td></tr>
+        <tr><td class="k">היקף</td><td>2 משתמשים למשק בית, כמה משקי בית, כמה אלפי תנועות בשנה לכל אחד. לא צריך לתכנן לסקייל.</td></tr>
+        <tr><td class="k">ריבוי מכשירים</td><td>שני בני זוג, טלפונים ומחשב, אותם נתונים בזמן אמת. לכן הנתונים חייבים לשבת בשרת ולא במכשיר.</td></tr>
+        <tr><td class="k">בנקים</td><td>לבנקים בישראל אין API פתוח לאדם פרטי. הגישה היחידה היא scraping של אתר הבנק עם דפדפן, כולל קוד ב־SMS לפעמים.</td></tr>
+        <tr><td class="k">רגישות</td><td>נתונים פיננסיים, ופרטי כניסה לבנק. דליפה כאן היא נזק אמיתי.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>מאפייני איכות, לפי סדר עדיפות</h3>
+  <ol class="steps">
+    <li><div><strong>אבטחה ופרטיות.</strong> בידוד מוחלט בין משקי בית, ופרטי בנק שהשרת לא יכול לקרוא.</div></li>
+    <li><div><strong>נכונות של החשבון.</strong> סכומי כסף, כפילויות מהבנק, חודשים שחוצים תאריכים. טעות כאן הופכת את האפליקציה לחסרת ערך.</div></li>
+    <li><div><strong>מעט תפעול ומעט עלות.</strong> כל רכיב שצריך לתחזק הוא רכיב שיתקלקל בלי שמישהו ישים לב.</div></li>
+    <li><div><strong>מהירות בטלפון.</strong> רישום הוצאה צריך לקחת שניות, אחרת לא רושמים.</div></li>
+    <li><div><strong>ניידות.</strong> אפשרות לעזוב ספק בלי לכתוב הכול מחדש. חשוב, אבל אחרון ברשימה.</div></li>
+  </ol>
+</section>
+
+<!-- 3 -->
+<section id="containers">
+  <div class="part"><span class="num">3</span><h2>קונטיינרים וגבולות אמון</h2></div>
+  <p class="lead">תצוגת C4 ברמה 2: התהליכים שרצים, איפה הם רצים, ובאיזה פרוטוקול הם מדברים. המסגרות המקווקוות הן גבולות אמון.</p>
+
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 860 560" role="img" aria-labelledby="c4-title">
+        <title id="c4-title">תרשים קונטיינרים: דפדפן, Next.js ו־Cron ב־Vercel, Supabase, סוכן בבית, ושירותים חיצוניים</title>
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="ahh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead home" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <!-- trust regions -->
+        <rect class="region" x="300" y="16" width="340" height="232" rx="18"/>
+        <text class="region-lbl" x="470" y="36" text-anchor="middle">Vercel · fra1</text>
+        <rect class="region" x="300" y="268" width="340" height="124" rx="18"/>
+        <text class="region-lbl" x="470" y="288" text-anchor="middle">Supabase · eu-central-1</text>
+        <rect class="region" x="300" y="412" width="340" height="132" rx="18"/>
+        <text class="region-lbl rtl" x="470" y="432" text-anchor="middle">רשת ביתית (מאחורי NAT)</text>
+
+        <!-- edges -->
+        <line class="edge" x1="680" y1="83" x2="624" y2="83" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <text class="lbl" x="652" y="140" text-anchor="middle">HTTPS</text>
+        <text class="lbl" x="652" y="155" text-anchor="middle">cookie (JWT)</text>
+        <line class="edge" x1="652" y1="122" x2="652" y2="98" style="stroke-dasharray:2 3"/>
+
+        <line class="edge" x1="320" y1="83" x2="244" y2="83" marker-end="url(#ah)"/>
+        <text class="lbl" x="282" y="73" text-anchor="middle">BYOK</text>
+
+        <line class="edge" x1="390" y1="125" x2="390" y2="292" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <text class="lbl" x="390" y="200" text-anchor="middle">PostgREST</text>
+        <text class="lbl" x="390" y="215" text-anchor="middle">user JWT → RLS</text>
+
+        <line class="edge" x1="550" y1="222" x2="550" y2="292" marker-end="url(#ah)"/>
+        <text class="lbl" x="550" y="262" text-anchor="middle">service_role</text>
+
+        <line class="edge" x1="620" y1="187" x2="676" y2="187" marker-end="url(#ah)"/>
+
+        <line class="edge home" x1="470" y1="446" x2="470" y2="374" marker-end="url(#ahh)" marker-start="url(#ahh)"/>
+        <text class="lbl" x="470" y="402" text-anchor="middle">poll 4s · JWT</text>
+
+        <line class="edge home" x1="620" y1="484" x2="676" y2="484" marker-end="url(#ahh)"/>
+
+        <polyline class="edge home" points="320,484 140,484 140,123" marker-end="url(#ahh)"/>
+        <text class="lbl rtl" x="230" y="474" text-anchor="middle">שיוך קטגוריות</text>
+
+        <!-- boxes -->
+        <rect class="box user" x="680" y="45" width="160" height="76" rx="14"/>
+        <text class="t1 rtl" x="760" y="76" text-anchor="middle">דפדפן / PWA</text>
+        <text class="t2" x="760" y="98" text-anchor="middle">React 19 client</text>
+
+        <rect class="box ours" x="320" y="45" width="300" height="80" rx="14"/>
+        <text class="t1" x="470" y="76" text-anchor="middle">Next.js 16 app</text>
+        <text class="t2" x="470" y="99" text-anchor="middle">RSC · Server Actions · proxy.ts</text>
+
+        <rect class="box ours" x="480" y="152" width="140" height="70" rx="14"/>
+        <text class="t1" x="550" y="181" text-anchor="middle">Cron route</text>
+        <text class="t2" x="550" y="202" text-anchor="middle">monthly-report</text>
+
+        <rect class="box ext" x="40" y="45" width="200" height="76" rx="14"/>
+        <text class="t1" x="140" y="76" text-anchor="middle">Anthropic API</text>
+        <text class="t2" x="140" y="98" text-anchor="middle">claude-haiku-5-5</text>
+
+        <rect class="box ext" x="680" y="152" width="160" height="70" rx="14"/>
+        <text class="t1" x="760" y="181" text-anchor="middle">Brevo</text>
+        <text class="t2" x="760" y="202" text-anchor="middle">transactional email</text>
+
+        <rect class="box ours" x="320" y="296" width="300" height="78" rx="14"/>
+        <text class="t1" x="470" y="326" text-anchor="middle">Postgres + RLS</text>
+        <text class="t2" x="470" y="349" text-anchor="middle">PostgREST · GoTrue Auth</text>
+
+        <rect class="box home" x="320" y="446" width="300" height="76" rx="14"/>
+        <text class="t1" x="470" y="476" text-anchor="middle">sync agent (Node)</text>
+        <text class="t2" x="470" y="498" text-anchor="middle">israeli-bank-scrapers · Chrome</text>
+
+        <rect class="box ext" x="680" y="446" width="160" height="76" rx="14"/>
+        <text class="t1 rtl" x="760" y="477" text-anchor="middle">אתרי בנקים</text>
+        <text class="t2" x="760" y="499" text-anchor="middle">HTML scraping</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--accent-soft)"></i>קוד שלנו בענן</span>
+      <span><i style="background:var(--coral-soft)"></i>קוד שלנו בבית</span>
+      <span><i style="background:var(--sky-soft)"></i>שירות חיצוני</span>
+      <span><i style="background:var(--good-soft)"></i>לקוח</span>
+    </div>
+    <figcaption>כל החיבורים מהרשת הביתית יוצאים ממנה (outbound only). אף רכיב בענן לא יודע איך להגיע לסוכן, ולא צריך לפתוח פורט בנתב.</figcaption>
+  </figure>
+
+  <h3>מה עובר כל גבול</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>גבול</th><th>מה עובר</th><th>מה לא עובר אף פעם</th></tr></thead>
+      <tbody>
+        <tr><td class="k">דפדפן ← Vercel</td><td>cookie עם session של Supabase. פרטי בנק עוברים רק אחרי שהוצפנו בדפדפן.</td><td>מפתחות שרת. הדפדפן מקבל רק את המפתח הציבורי (publishable) של Supabase.</td></tr>
+        <tr><td class="k">Vercel ← Supabase</td><td>JWT של המשתמש, כך שכל שאילתה רצה תחת <code>auth.uid()</code> שלו.</td><td><code>service_role</code>, חוץ מהנתיב של ה־cron.</td></tr>
+        <tr><td class="k">בית ← Supabase</td><td>JWT של משתמש רגיל, ופרטי בנק מוצפנים.</td><td>המפתח הפרטי של הסוכן. הוא נשאר בקובץ מקומי.</td></tr>
+        <tr><td class="k">Vercel ← Anthropic</td><td>הודעת המשתמש, שמות הקטגוריות, ותקציר החודש.</td><td>פרטי בנק, ונתונים של משק בית אחר.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 4 -->
+<section id="supabase">
+  <div class="part"><span class="num">4</span><h2>למה Supabase ולא שלוש שכבות קלאסיות</h2></div>
+  <p class="lead">זו ההחלטה שהכי משפיעה על כל השאר, ולכן היא מקבלת פרק משלה. השאלה היא למה לא בנינו front, back ו־database נפרדים: React SPA, שרת API (Express, NestJS או ‎.NET) שמדבר עם Postgres, ומערכת התחברות שכתבנו בעצמנו.</p>
+
+  <div class="note key"><b>חשוב להבין:</b> לא ויתרנו על השכבות. גם כאן יש תצוגה, לוגיקה ונתונים. ויתרנו על <em>תהליך API נפרד</em> ועל <em>אכיפת הרשאות בקוד האפליקציה</em>. שרת Next.js הוא ה־backend, ו־Postgres הוא המסד. ההבדל הוא איפה יושב גבול האבטחה ומי מחזיק את שכבת הגישה לנתונים.</div>
+
+  <h3>החלופות</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>א. קלאסי<br><span class="muted">SPA + API נפרד + Postgres + auth עצמי</span></th>
+          <th>ב. Next.js + Postgres מנוהל<br><span class="muted">Neon / RDS + Auth.js + ORM</span></th>
+          <th class="chosen">ג. Next.js + Supabase<br><span class="muted">נבחר</span></th>
+          <th>ד. Firebase<br><span class="muted">Firestore + Firebase Auth</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="k">התחברות</td><td><span class="n">לכתוב</span>: hashing, sessions, איפוס סיסמה, אימות מייל</td><td><span class="m">ספרייה</span>, אבל טבלאות ו־adapter עלינו</td><td class="chosen"><span class="y">מובנה</span>, כולל JWT חתום שהמסד מבין</td><td><span class="y">מובנה</span></td></tr>
+        <tr><td class="k">איפה נאכפות הרשאות</td><td>בקוד ה־API, בכל endpoint</td><td>בקוד השרת, בכל action</td><td class="chosen"><span class="y">במסד (RLS)</span>, ובקוד כשכבה שנייה</td><td>Security Rules, שפה נפרדת</td></tr>
+        <tr><td class="k">גישה לסוכן בבית</td><td><span class="n">לבנות endpoints</span>, לאבטח ולבדוק</td><td><span class="n">לבנות endpoints</span> או לפתוח את המסד</td><td class="chosen"><span class="y">PostgREST</span> עם אותן מדיניות, בלי קוד חדש</td><td><span class="y">SDK</span> עם אותם rules</td></tr>
+        <tr><td class="k">התאמה לנתונים</td><td><span class="y">רלציוני</span></td><td><span class="y">רלציוני</span></td><td class="chosen"><span class="y">רלציוני</span></td><td><span class="n">מסמכים</span>: סכומים, joins ו־unique קשים</td></tr>
+        <tr><td class="k">תפעול</td><td><span class="n">שני שירותים</span> להריץ, לנטר ולעדכן</td><td><span class="m">שירות אחד</span> + מסד</td><td class="chosen"><span class="y">שירות אחד</span> + מסד מנוהל</td><td><span class="y">מינימלי</span></td></tr>
+        <tr><td class="k">עלות</td><td>שרת API שרץ תמיד</td><td>חינמי ברובו</td><td class="chosen">חינמי</td><td>חינמי בהיקף הזה</td></tr>
+        <tr><td class="k">נעילה לספק</td><td><span class="y">נמוכה</span></td><td><span class="y">נמוכה</span></td><td class="chosen"><span class="m">בינונית</span>: Postgres נייד, ה־Auth פחות</td><td><span class="n">גבוהה</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>הנימוקים שהכריעו</h3>
+  <ol class="steps">
+    <li><div><strong>יש שני לקוחות למסד, לא אחד.</strong> הסוכן בבית צריך לקרוא בקשות סנכרון, לקרוא פרטים מוצפנים ולכתוב תנועות. בארכיטקטורה קלאסית זה אומר עוד סט endpoints, עוד אימות ועוד בדיקות. עם Supabase הסוכן מתחבר כמשתמש רגיל ומקבל את PostgREST עם אותן מדיניות RLS שהאתר מקבל. אין קוד הרשאות שני שיכול לסטות מהראשון.</div></li>
+    <li><div><strong>ההרשאות יושבות היכן שהנתונים נמצאים.</strong> בגישה הקלאסית כל endpoint חייב לזכור להוסיף <code>where household_id = ?</code>. מספיק endpoint אחד ששכח, ומשק בית אחד רואה נתונים של אחר. עם RLS, גם שאילתה ששכחה את התנאי מחזירה רק שורות שמותרות. הקוד עדיין מסנן לפי משק בית, אבל זו שכבה שנייה ולא היחידה.</div></li>
+    <li><div><strong>התחברות היא קוד שלא כדאי לכתוב לבד.</strong> hashing, rotation של tokens, איפוס סיסמה, אימות מייל, הגנה מ־brute force. Supabase Auth מוציא JWT חתום (ES256) שגם המסד מבין (<code>auth.uid()</code>) וגם השרת מאמת מקומית (<code>getClaims</code>), בלי round-trip.</div></li>
+    <li><div><strong>זה עדיין Postgres.</strong> בניגוד ל־Firebase, הנתונים רלציוניים: סכומים לפי קטגוריה וחודש, unique על מזהה מהבנק, foreign keys עם cascade, ו־<code>numeric(12,2)</code> לכסף. אפשר לעשות <code>pg_dump</code> ולעבור לכל Postgres אחר.</div></li>
+    <li><div><strong>אין שרת API שצריך להחזיק.</strong> מפתח אחד לא יכול לתחזק שני שירותים, CI לשניהם, ניטור לשניהם, ותיאום גרסאות ביניהם.</div></li>
+  </ol>
+
+  <h3>המחיר</h3>
+  <ul class="plain pm">
+    <li class="minus"><strong>הלוגיקה מפוצלת בין SQL ל־TypeScript.</strong> מדיניות RLS ופונקציות <code>security definer</code> כתובות ב־SQL, השאר ב־TS. מי שקורא את הקוד צריך להכיר את שניהם.</li>
+    <li class="minus"><strong>קשה יותר לדבג RLS.</strong> מדיניות שחוסמת לא זורקת שגיאה בקריאה, היא מחזירה רשימה ריקה. בגלל זה יש 70 בדיקות שמריצות את הסכמה על PGlite (Postgres בזיכרון) ומנסות לפרוץ אותה.</li>
+    <li class="minus"><strong>נעילה ל־Supabase Auth.</strong> המשתמשים יושבים בסכמה <code>auth</code> ש־Supabase מנהל, והמדיניות קוראות ל־<code>auth.uid()</code>. מעבר לספק אחר דורש להעביר משתמשים ולהחליף את הפונקציה.</li>
+    <li class="minus"><strong>אין API ציבורי מתועד.</strong> Server Actions הם RPC פנימי של Next.js. אם תהיה אפליקציה native, היא תדבר עם PostgREST ישירות או שנצטרך להוסיף API.</li>
+    <li class="minus"><strong>תלות במסלול החינמי.</strong> בתוכנית החינמית Supabase משהה פרויקט שלא היה בו שימוש תקופה מסוימת. הסנכרון היומי שומר אותו פעיל, אבל זו תלות שכדאי לזכור.</li>
+  </ul>
+
+  <h3>מתי זו הייתה בחירה לא נכונה</h3>
+  <p>אם היו כאן לוגיקה עסקית כבדה בצד השרת, הרבה אינטגרציות שצריכות orchestration, צוות עם backend developers, או לקוחות חיצוניים שצריכים API יציב, ארכיטקטורה קלאסית עם שכבת שירותים מפורשת הייתה נכונה יותר. כאן הלוגיקה היא בעיקר חישוב על נתונים קטנים, והיא רצה כפונקציות טהורות בכל מקרה.</p>
+</section>
+
+<!-- 5 -->
+<section id="adrs">
+  <div class="part"><span class="num">5</span><h2>רשומות החלטה (ADR)</h2></div>
+  <p class="lead">כל ההחלטות המשמעותיות. כל אחת עם ההקשר שלה, החלופות, המחיר, ומה ישנה אותה.</p>
+
+  <!-- ADR-01 -->
+  <article class="adr">
+    <header><span class="id">ADR-01</span><h3>מונוליט Next.js עם Server Components ו־Server Actions</h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>צריך UI מהיר בטלפון, שרת שמחזיק סודות (מפתחות Claude), וכתיבות עם אימות. מפתח אחד.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div>אפליקציית Next.js אחת. קריאות נעשות ב־RSC ישירות מול המסד (<code>src/lib/data.ts</code>). כתיבות עוברות דרך Server Actions. אין שכבת REST.</div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div><ul>
+      <li><strong>SPA + REST API:</strong> שני deployables, DTOs כפולים, ו־waterfall של fetch בצד הלקוח. נדחה בגלל עלות התחזוקה.</li>
+      <li><strong>tRPC או GraphQL:</strong> נותן type-safety מקצה לקצה, אבל Server Actions נותנים את אותו דבר בלי שכבה נוספת.</li>
+      <li><strong>Remix או SvelteKit:</strong> מתאימים באותה מידה. Next.js נבחר בגלל האינטגרציה עם Vercel והאקוסיסטם.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">טיפוסים משותפים מהמסד עד הקומפוננטה, בלי סריאליזציה ידנית.</li>
+      <li class="plus">דף נטען עם הנתונים בתוכו (streaming עם Suspense), בלי spinner ראשוני.</li>
+      <li class="minus">Next.js 16 שונה מהתיעוד הישן: <code>proxy.ts</code> במקום middleware, ו־<code>cacheComponents</code> שמחייב שכל גישה ל־cookies תהיה מאחורי Suspense. לכן יש <code>loading.tsx</code> בכל תיקיית מסך.</li>
+      <li class="minus">Server Actions הם endpoints ציבוריים. כל action חייב לאמת בעצמו, וזה נעשה דרך <code>requireContext</code>.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag rev">לחזור אם</div><div>תידרש אפליקציה native או לקוח צד שלישי שצריך API יציב ומתועד.</div></div>
+  </article>
+
+  <!-- ADR-02 -->
+  <article class="adr">
+    <header><span class="id">ADR-02</span><h3>Supabase כמסד, Auth ו־API לסוכן</h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>מפורט בפרק 4.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div>Supabase (Postgres מנוהל, GoTrue, PostgREST). הלקוח בשרת נוצר עם המפתח הציבורי וה־session מה־cookie (<code>@supabase/ssr</code>), כך שכל שאילתה רצה כמשתמש ולא כמנהל.</div></div>
+    <div class="row"><div class="tag rev">לחזור אם</div><div>המסלול החינמי לא יספיק, או שיהיה צורך ב־Auth שלא נתמך (SSO ארגוני, למשל).</div></div>
+  </article>
+
+  <!-- ADR-03 -->
+  <article class="adr">
+    <header><span class="id">ADR-03</span><h3>הרשאות ב־RLS כגבול האבטחה הראשי</h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>נתונים פיננסיים של כמה משקי בית באותו מסד. דליפה בין משקי בית היא הכשל החמור ביותר האפשרי.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div>RLS על כל 11 הטבלאות. המדיניות נשענות על <code>is_household_member(household_id)</code>, פונקציית <code>security definer</code> שבודקת את <code>auth.uid()</code> מול <code>household_members</code>. ל־anon אין שום הרשאה (<code>revoke</code>). בטבלאות רגישות יש גם הרשאות ברמת העמודה: חבר לא יכול לשנות את קוד ההזמנה או את <code>max_members</code>.</div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div><ul>
+      <li><strong>אכיפה בקוד בלבד:</strong> נקודת כשל אחת. כל שאילתה חדשה היא הזדמנות לשכוח.</li>
+      <li><strong>Repository layer שמוסיף את התנאי אוטומטית:</strong> עדיף על כלום, אבל לא מגן על הסוכן, שלא עובר דרכו.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">Defense in depth: באג באתר או בסוכן לא חושף נתונים של משק בית אחר.</li>
+      <li class="plus">אפשר לבדוק את המדיניות בבידוד (<code>npm run test:db</code>, על PGlite).</li>
+      <li class="minus">המדיניות רצה על כל שורה. בהיקף הזה זה זניח, ויש אינדקסים על <code>household_id</code>.</li>
+      <li class="minus">פונקציות <code>security definer</code> עוקפות RLS. כל אחת מהן צריכה לבדוק הכול בעצמה ולקבוע <code>search_path</code>.</li>
+    </ul></div></div>
+  </article>
+
+  <!-- ADR-04 -->
+  <article class="adr">
+    <header><span class="id">ADR-04</span><h3>Multi-tenancy: סכמה משותפת עם <code>household_id</code></h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>האפליקציה נפתחה למשפחות נוספות. כל משפחה היא tenant.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div>Pool model: כל הטבלאות משותפות, ולכל שורה יש <code>household_id</code>. <code>unique(user_id)</code> ב־<code>household_members</code> מבטיח שמשתמש שייך למשק בית אחד בלבד. ההצטרפות עוברת דרך <code>join_household</code>, שאוכפת <code>max_members = 2</code>.</div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div><ul>
+      <li><strong>סכמה לכל tenant:</strong> בידוד חזק יותר, אבל migrations כפול מספר המשפחות, ו־PostgREST לא בנוי לזה.</li>
+      <li><strong>מסד לכל tenant:</strong> מתאים לרגולציה כבדה. כאן זה פרויקט Supabase לכל משפחה, וזה לא מעשי.</li>
+      <li><strong>משתמש שיכול להשתייך לכמה משקי בית:</strong> נדחה. כל שאילתה הייתה צריכה לדעת מה משק הבית "הפעיל".</li>
+    </ul></div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">כל שאילתה פשוטה: "השורות של משק הבית שלי".</li>
+      <li class="minus">הבידוד תלוי לגמרי בנכונות של RLS (ADR-03), ולכן יש עליו בדיקות.</li>
+      <li class="minus">קוד ההזמנה הוא 8 תווים הקסדצימליים (32 ביט). זה בסדר רק כי משק בית נסגר אחרי שני חברים ו־Auth מגביל ניסיונות.</li>
+    </ul></div></div>
+  </article>
+
+  <!-- ADR-05 -->
+  <article class="adr">
+    <header><span class="id">ADR-05</span><h3>לוגיקה עסקית כפונקציות טהורות, ומצב נגזר בזמן קריאה</h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>"מותר להוציא היום", קרנות, יעדים וארנק המזומן תלויים כולם באותן תנועות. הכללים השתנו הרבה במהלך הפיתוח.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div>המסד שומר רק עובדות: תנועות, קטגוריות, הגדרות. כל מה שנגזר (יתרות, יתרת קרן, נצבר ליעד, חלוקת המזומן) מחושב בכל בקשה בפונקציות טהורות ב־<code>src/lib/budget.ts</code>: <code>summarizeMonth</code>, <code>fundStatus</code>, <code>goalStatus</code>, <code>settleCash</code>. אין I/O בתוכן. האתר, הבוט והדוח קוראים לאותן פונקציות.</div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div><ul>
+      <li><strong>יתרות שמורות שמתעדכנות בטריגרים:</strong> מהיר בקריאה, אבל כל שינוי בכלל דורש migration של נתונים, ובאג משאיר יתרות שגויות לתמיד.</li>
+      <li><strong>Event sourcing / ledger כפול:</strong> הנכון ביותר לכסף, אבל מורכבות שלא מוצדקת בהיקף הזה.</li>
+      <li><strong>חישוב ב־SQL (views, functions):</strong> מהיר, אבל קשה לבדוק ולשנות, ומפצל את הלוגיקה עוד יותר.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">דטרמיניסטי ובדיק: רוב 165 בדיקות היחידה רצות על הפונקציות האלה בלי מסד.</li>
+      <li class="plus">שינוי כלל מתוקן אחורה מיד. סימון "שולם במזומן" אפשר לבטל, כי שום שורה לא השתנתה.</li>
+      <li class="plus">מספר אחד בכל מקום: האתר והדוח לא יכולים להראות סכומים שונים.</li>
+      <li class="minus">חישוב בכל בקשה. בכמה אלפי שורות זה מילישניות, אבל קרנות ויעדים צריכים היסטוריה (<code>getFundHistory</code>, <code>getGoalSaved</code>), שמוסיפה שאילתות.</li>
+      <li class="minus">ערכים שתלויים בזמן לא נשמרים: שינוי של ההפרשה החודשית לקרן משנה גם את העבר. הפתרון הנכון הוא טבלת הפרשות עם תאריכי תוקף.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag rev">לחזור אם</div><div>הנתונים יגדלו לעשרות אלפי שורות למשק בית, או שיידרשו דוחות היסטוריים שלא משתנים בדיעבד.</div></div>
+  </article>
+
+  <!-- ADR-06 -->
+  <article class="adr">
+    <header><span class="id">ADR-06</span><h3>סנכרון בנקים: worker בבית שמושך עבודות מטבלה</h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>הגישה היחידה לבנקים היא scraping עם דפדפן מלא. האתר רץ ב־serverless ואין לו דרך להגיע למחשב בבית.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div>Node process בבית (<code>sync/agent.mjs</code>). האתר כותב שורה ל־<code>bank_sync_runs</code> בסטטוס <code>queued</code>. הסוכן עושה polling כל 4 שניות, מעביר ל־<code>running</code>, מריץ, מזרים פלט לעמודת <code>output</code>, ומסיים ב־<code>done</code> או <code>failed</code>. בקשה שלא נאספה תוך 10 דקות נכשלת. heartbeat כל 15 שניות מעדכן את <code>agent_seen_at</code>, כך שהמסך יודע אם הסוכן חי. בקשה נוצרת מכפתור במסך המפתחים או מפקודה בבוט ("סנכרן חצי שנה"). הפקודה מזוהה בקוד (<code>src/lib/sync-command.ts</code>) ולא דרך Claude, כי היא מפעילה כניסה לבנק ואסור שניסוח של מודל יחליט על זה.</div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div><ul>
+      <li><strong>Headless Chrome בענן</strong> (פונקציה עם Chromium, או שירות כמו Browserless): לפונקציות serverless יש מגבלות זמן וגודל, בנקים חוסמים כתובות של data centers, ופרטי הכניסה היו חייבים להיות ניתנים לפענוח בענן.</li>
+      <li><strong>Open banking:</strong> בישראל הממשק זמין רק לגופים בעלי רישיון לפי חוק שירות מידע פיננסי. לא זמין לפרויקט פרטי.</li>
+      <li><strong>ייבוא CSV ידני:</strong> בטוח לגמרי, אבל אף אחד לא עושה את זה כל שבוע.</li>
+      <li><strong>Supabase Realtime במקום polling:</strong> latency נמוך יותר, אבל צריך לטפל בניתוקים ו־reconnect. עבודה שלוקחת דקות לא מרוויחה כלום מ־latency של שנייה במקום ארבע.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">אין פורט פתוח ברשת הביתית. הסוכן רק פונה החוצה.</li>
+      <li class="plus">הטבלה היא גם התור, גם הלוג וגם ה־UI: אין message broker.</li>
+      <li class="minus">הסנכרון עובד רק כשהמחשב דלוק.</li>
+      <li class="minus">ה־polling מייצר כ־21,600 שאילתות ביום. זניח בהיקף הזה.</li>
+      <li class="minus">משפחה אחרת צריכה Node ושורת פקודה כדי להריץ את הסוכן.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag rev">לחזור אם</div><div>יהיו הרבה משפחות שלא יכולות להריץ סוכן, או שיהיה ספק מורשה שמאפשר גישה דרך API.</div></div>
+  </article>
+
+  <!-- ADR-07 -->
+  <article class="adr">
+    <header><span class="id">ADR-07</span><h3>פרטי בנק: הצפנה בדפדפן למפתח של הסוכן</h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>נוח למלא פרטי בנק באתר, אבל אסור שהשרת או המסד יוכלו לקרוא אותם.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div>Envelope encryption: הסוכן מייצר זוג RSA ומפרסם את הציבורי ב־<code>bank_sync_settings.public_key</code>. הדפדפן מייצר מפתח AES-GCM, מצפין בו את הפרטים, ועוטף אותו ב־RSA-OAEP. רק הסוכן, עם הפרטי (<code>sync/agent-key.json</code>), פותח. אותו קוד רץ בדפדפן וב־Node, דרך WebCrypto (<code>sync/seal.mjs</code>). כל כניסה מוצפנת כפריט נפרד ברשימה (<code>sync/logins.mjs</code>), כך ששמירה חלקית לא דורסת את השאר.</div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div><ul>
+      <li><strong>הצפנה בשרת עם מפתח של האפליקציה:</strong> מי שמשיג את משתני הסביבה ב־Vercel ואת המסד מקבל את כל פרטי הבנק של כולם.</li>
+      <li><strong>פרטים רק ב־<code>.env</code> מקומי:</strong> בטוח, אבל בלי ממשק באתר. זה היה המצב הראשון.</li>
+      <li><strong>KMS בענן:</strong> עדיין השרת זה שמפענח.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">Zero-knowledge מבחינת השרת והמסד.</li>
+      <li class="minus">התקפת החלפת מפתח: מי שמחובר לאפליקציה יכול לשים מפתח ציבורי משלו, ופרטים שיוזנו אחר כך יוצפנו אליו. המענה הוא fingerprint שמוצג במסך ונבדק מול מה שהסוכן מדפיס.</li>
+      <li class="minus">איבוד <code>agent-key.json</code> פירושו הזנה מחדש של כל הפרטים.</li>
+    </ul></div></div>
+  </article>
+
+  <!-- ADR-08 -->
+  <article class="adr">
+    <header><span class="id">ADR-08</span><h3>סנכרון אידמפוטנטי ותכנון בלי I/O</h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>אותה תנועה נקראת שוב בכל סנכרון. חיוב חודשי של כרטיס בחשבון הבנק הוא סכום של קניות שנקראות גם מהכרטיס. משתמשים רושמים הוצאות גם ביד.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div>לכל תנועה יש <code>external_id</code> דטרמיניסטי (חברה, כרטיס, מזהה עסקה), ו־partial unique index על <code>(household_id, external_id)</code>. ההחלטות עצמן (חדש, קיים, לדלג, להזיז, להסיר) נמצאות ב־<code>sync/plan.mjs</code> כפונקציה טהורה שמקבלת תנועות ומחזירה תוכנית. רק אחר כך התוכנית מבוצעת. מצב <code>dry_run</code> מדפיס את התוכנית בלי לבצע.</div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">אפשר להריץ סנכרון כמה פעמים שרוצים. המסד מבטיח שאין כפילות גם אם יש באג בקוד.</li>
+      <li class="plus">כל כלל (חיוב כרטיס, העברה בין חשבונות, משכורת בסוף החודש) נבדק בבדיקות יחידה בלי בנק.</li>
+      <li class="minus">ההתאמה להוצאה ידנית היא heuristic: אותו סכום, עד יומיים הפרש. שתי קניות זהות באותו שבוע עלולות להתאחד.</li>
+    </ul></div></div>
+  </article>
+
+  <!-- ADR-09 -->
+  <article class="adr">
+    <header><span class="id">ADR-09</span><h3>LLM: פלט מובנה, enum לפי אינדקס, fallback ומפתח לכל משק בית</h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>טקסט חופשי בעברית צריך להפוך לרשומה מובנית. LLM הוא לא דטרמיניסטי, הוא עולה כסף, והוא יכול להיות לא זמין.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div><ul>
+      <li>Structured output עם JSON Schema שנגזר מ־Zod. הפלט עובר ולידציה, ומה שלא עובר נופל ל־parser מבוסס מילות מפתח (<code>parse-fallback.ts</code>).</li>
+      <li>קטגוריה מוחזרת כאינדקס ברשימה ממוספרת ולא כשם. מספר מחוץ לטווח נחשב "בלי קטגוריה".</li>
+      <li>המודל נבחר לפי eval קטן: 25 הודעות, פעמיים כל אחת. Haiku 5.5 קיבל 50/50 ו־Haiku 4.5 קיבל 44/50, באותו latency.</li>
+      <li>BYOK: כל משק בית שומר מפתח משלו, מוצפן ב־AES-256-GCM עם <code>SECRETS_KEY</code> שקיים רק ב־Vercel (<code>secret-box.ts</code>).</li>
+    </ul></div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div><ul>
+      <li><strong>מפתח משותף של האתר עם מכסה יומית:</strong> היה קיים והוסר. המפעיל משלם על משתמשים אחרים.</li>
+      <li><strong>קריאה ל־API מהדפדפן:</strong> חושפת את המפתח.</li>
+      <li><strong>שם קטגוריה עם enum ב־schema:</strong> גרסת ה־SDK העבירה את ה־enum לתיאור בלבד, והמודל החזיר שמות קרובים שלא היו ברשימה.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">הבוט ממשיך לעבוד גם בלי מפתח או כש־Anthropic לא זמין.</li>
+      <li class="minus">מפתח Claude הוא לא zero-knowledge: השרת חייב אותו גלוי כדי לקרוא ל־API, ולכן מי שמפעיל את האתר יכול טכנית לפענח אותו. זה מתועד ב־README.</li>
+    </ul></div></div>
+  </article>
+
+  <!-- ADR-10 -->
+  <article class="adr">
+    <header><span class="id">ADR-10</span><h3>Job מתוזמן: Vercel Cron, אידמפוטנטיות ו־<code>service_role</code> מבודד</h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>הדוח החודשי רץ בלי משתמש מחובר, ולכן אין JWT ו־RLS מחזיר כלום.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div><ul>
+      <li>Vercel Cron: <code>0 6 3-5 * *</code>. שלושה ניסיונות, ב־3, ב־4 וב־5 לחודש.</li>
+      <li>Claim לפני שליחה: <code>insert</code> ל־<code>report_log</code> עם primary key על <code>(household_id, period)</code>. אם ה־insert נכשל, מישהו כבר שלח. אם השליחה נכשלה, השורה נמחקת וה־cron של מחר ינסה שוב.</li>
+      <li><code>service_role</code> נקרא רק ב־<code>src/lib/supabase/admin.ts</code>, שמיובא רק מנתיב ה־cron. הנתיב בודק <code>CRON_SECRET</code> לפני כל דבר, וכל שאילתה בו מסננת לפי <code>household_id</code> במפורש.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div><ul>
+      <li><strong>פונקציות <code>security definer</code> צרות עם סוד:</strong> בלי מפתח עוקף בכלל, אבל עוד SQL שמחזיר נתונים מחוץ ל־RLS.</li>
+      <li><strong>pg_cron ו־Supabase Edge Function:</strong> עוד runtime ועוד deploy.</li>
+      <li><strong>דוח רק לפי בקשה:</strong> בלי שום מפתח, אבל לא עונה על הדרישה.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">לכל היותר מייל אחד לחודש, עם retry אוטומטי.</li>
+      <li class="minus">קיים מפתח שעוקף RLS. הבידוד שלו נשען על כך שאף מודול אחר לא מייבא את <code>admin.ts</code>, ואין בדיקה אוטומטית שאוכפת את זה. ההשוואה של הסוד נעשית ב־<code>sameSecret</code>, שיש עליה בדיקה.</li>
+      <li class="minus">קריסה בין ה־claim לשליחה משאירה claim בלי מייל, והחודש הזה לא יישלח. מקרה נדיר, ומקובל.</li>
+    </ul></div></div>
+  </article>
+
+  <!-- ADR-11 -->
+  <article class="adr">
+    <header><span class="id">ADR-11</span><h3>Brevo לשליחת מייל</h3></header>
+    <div class="row"><div class="tag dec">החלטה</div><div>Brevo HTTP API, ב־<code>fetch</code> בלי SDK (<code>src/lib/email.ts</code>). HTML עם inline styles וטבלאות, בלי תמונות וסקריפטים. כל ערך מהנתונים עובר <code>escapeHtml</code>.</div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div><ul>
+      <li><strong>Gmail SMTP עם app password:</strong> הסיסמה נותנת גם קריאה של כל התיבה. scope רחב מדי.</li>
+      <li><strong>Resend:</strong> בלי דומיין מאומת שולח רק לבעל החשבון.</li>
+      <li><strong>Amazon SES:</strong> דורש דומיין ויציאה מ־sandbox.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">המפתח יכול רק לשלוח.</li>
+      <li class="minus">Brevo מוסיפה tracking pixel ו־link rewriting. יש מכסה יומית, ואין rate limit על "שלח עכשיו".</li>
+    </ul></div></div>
+  </article>
+
+  <!-- ADR-12 -->
+  <article class="adr">
+    <header><span class="id">ADR-12</span><h3>PWA במקום אפליקציה native</h3></header>
+    <div class="row"><div class="tag dec">החלטה</div><div>Manifest ואייקונים שנוצרים בקוד (<code>manifest.ts</code>, <code>pwa-icon/[size]</code>), ו־<code>apple-touch-icon</code> לאייפון.</div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div>React Native או Capacitor: חנות, build לכל פלטפורמה, ועדכונים שתלויים באישור.</div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">deploy אחד מגיע לכל המכשירים תוך חצי דקה.</li>
+      <li class="minus">אין offline ואין push notifications בלי service worker ו־Web Push, שעוד לא נבנו.</li>
+    </ul></div></div>
+  </article>
+
+  <!-- ADR-13 -->
+  <article class="adr">
+    <header><span class="id">ADR-13</span><h3>Co-location של פונקציות ומסד, ואימות JWT מקומי</h3></header>
+    <div class="row"><div class="tag ctx">הקשר</div><div>כל דף עושה כמה שאילתות ברצף. ה־latency בין הפונקציה למסד מוכפל במספר השאילתות.</div></div>
+    <div class="row"><div class="tag dec">החלטה</div><div>פונקציות Vercel ב־<code>fra1</code>, ופרויקט Supabase בפרנקפורט. אימות ה־session ב־<code>getClaims()</code> בודק חתימת ES256 מקומית, במקום <code>getUser()</code> שפונה לשרת ה־Auth.</div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">הפרויקט הראשון היה בסידני: 360ms לשאילתה. בפרנקפורט: כ־85ms. אימות מקומי חוסך עוד שני round-trips לדף.</li>
+      <li class="minus">JWT שבוטל בצד השרת נשאר תקף עד שפג תוקפו. מקובל באפליקציה הזו.</li>
+    </ul></div></div>
+  </article>
+
+  <!-- ADR-14 -->
+  <article class="adr">
+    <header><span class="id">ADR-14</span><h3>סכמה כקובץ SQL אידמפוטנטי אחד, בלי כלי migrations ובלי ORM</h3></header>
+    <div class="row"><div class="tag dec">החלטה</div><div><code>supabase/schema.sql</code> כתוב כך שאפשר להריץ אותו שוב ושוב: <code>create table if not exists</code>, <code>add column if not exists</code>, <code>create or replace</code>, ו־drop/create למדיניות. הגישה לנתונים היא דרך <code>supabase-js</code>, עם Zod בגבולות.</div></div>
+    <div class="row"><div class="tag alt">חלופות</div><div>Supabase CLI migrations, Prisma או Drizzle. נותנים היסטוריה, rollback וטיפוסים שנגזרים מהסכמה, אבל דורשים pipeline ו־shadow database.</div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">קובץ אחד שמתאר את המצב הנוכחי, וקל לקרוא אותו. אותו קובץ רץ בבדיקות על PGlite.</li>
+      <li class="minus">אין היסטוריה ואין rollback. שינוי הרסני (שינוי שם עמודה, למשל) צריך טיפול ידני.</li>
+      <li class="minus">אין סנכרון אוטומטי: הקוד יכול לעלות לפני שהסכמה הורצה. לכן הקוד בודק עמודות חדשות לפני שהוא כותב אליהן.</li>
+    </ul></div></div>
+    <div class="row"><div class="tag rev">לחזור אם</div><div>יהיו כמה סביבות (staging), עוד מפתח, או שינוי שדורש migration של נתונים.</div></div>
+  </article>
+
+  <!-- ADR-15 -->
+  <article class="adr">
+    <header><span class="id">ADR-15</span><h3>זרימת deploy: ענף עבודה וענף ייצור</h3></header>
+    <div class="row"><div class="tag dec">החלטה</div><div>עבודה ב־<code>overnight</code>. <code>main</code> הוא מה שרץ באתר. deploy הוא fast-forward merge ל־<code>main</code> ו־push, ו־Vercel Git Integration בונה ומחליף. לפני deploy רצים <code>test</code>, <code>test:db</code>, <code>lint</code>, <code>typecheck</code> ו־<code>build</code>.</div></div>
+    <div class="row"><div class="tag con">השלכות</div><div><ul class="pm">
+      <li class="plus">פשוט, וכל commit ב־<code>main</code> הוא גרסה שרצה.</li>
+      <li class="minus">אין CI שמריץ את הבדיקות אוטומטית. הן רצות ידנית לפני merge.</li>
+      <li class="minus">Vercel חוסם build כשמייל ה־commit לא משויך לחשבון GitHub.</li>
+    </ul></div></div>
+  </article>
+</section>
+
+<!-- 6 -->
+<section id="runtime">
+  <div class="part"><span class="num">6</span><h2>תרחישים בזמן ריצה</h2></div>
+
+  <h3>הודעה לבוט</h3>
+  <ol class="steps">
+    <li><div>הלקוח קורא ל־Server Action. ה־action מאמת את ה־session (<code>requireContext</code>) ומוצא את <code>household_id</code>.</div></li>
+    <li><div><code>handleChatMessage</code> (<code>src/lib/chat.ts</code>) טוען קטגוריות ותקציר חודש, ומפענח את המפתח של משק הבית.</div></li>
+    <li><div><code>interpretMessage</code> (<code>src/lib/bot.ts</code>) קורא ל־<code>messages.parse</code> עם פלט מובנה. אם אין תוצאה תקינה, ה־fallback מפענח.</div></li>
+    <li><div>הכתיבה ל־<code>transactions</code> ול־<code>chat_messages</code> נעשית עם ה־JWT של המשתמש, ו־RLS מוודא שה־<code>household_id</code> שלו. שתי ההודעות נשמרות עם timestamps מפורשים בהפרש של מילישנייה, כדי שהסדר ביניהן יהיה מובטח.</div></li>
+    <li><div><code>revalidatePath</code>, והמסכים מתרנדרים עם הסיכום החדש.</div></li>
+  </ol>
+
+  <h3>מחזור החיים של בקשת סנכרון</h3>
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 760 200" role="img" aria-labelledby="sm-title">
+        <title id="sm-title">מכונת מצבים של bank_sync_runs: queued, running, done, failed</title>
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <line class="edge" x1="150" y1="70" x2="286" y2="70" marker-end="url(#ah2)"/>
+        <text class="lbl" x="218" y="60" text-anchor="middle">agent claims</text>
+        <line class="edge" x1="430" y1="60" x2="576" y2="40" marker-end="url(#ah2)"/>
+        <text class="lbl" x="500" y="38" text-anchor="middle">success</text>
+        <line class="edge" x1="430" y1="80" x2="576" y2="130" marker-end="url(#ah2)"/>
+        <text class="lbl" x="500" y="96" text-anchor="middle">error</text>
+        <polyline class="edge" points="90,92 90,160 576,160" marker-end="url(#ah2)"/>
+        <text class="lbl" x="330" y="150" text-anchor="middle">not claimed in 10 min</text>
+
+        <rect class="box user" x="30" y="48" width="120" height="44" rx="12"/>
+        <text class="t1" x="90" y="76" text-anchor="middle">queued</text>
+        <rect class="box ours" x="290" y="48" width="140" height="44" rx="12"/>
+        <text class="t1" x="360" y="76" text-anchor="middle">running</text>
+        <rect class="box ours" x="580" y="18" width="150" height="44" rx="12"/>
+        <text class="t1" x="655" y="46" text-anchor="middle">done</text>
+        <rect class="box home" x="580" y="118" width="150" height="56" rx="12"/>
+        <text class="t1" x="655" y="146" text-anchor="middle">failed</text>
+        <text class="t2" x="655" y="163" text-anchor="middle">output has reason</text>
+      </svg>
+    </div>
+    <figcaption>הבקשה נוצרת מהאתר בסטטוס <code>queued</code>. הסוכן הוא היחיד שמזיז אותה הלאה. בזמן <code>running</code> הוא כותב את הפלט בהמשכים, והמסך מושך אותו כל שתי שניות.</figcaption>
+  </figure>
+
+  <h3>הדוח החודשי</h3>
+  <ol class="steps">
+    <li><div>Vercel Cron שולח GET לנתיב עם <code>Authorization: Bearer CRON_SECRET</code>. סוד חסר או שגוי מחזיר 403. בלי <code>service_role</code> או בלי הגדרות מייל, הנתיב מחזיר 503.</div></li>
+    <li><div>לכל משק בית שהדוח פעיל אצלו: claim ב־<code>report_log</code>.</div></li>
+    <li><div><code>collectReport</code> אוסף נתונים דרך אותן פונקציות של האתר, ו־<code>renderReportEmail</code> מייצר HTML.</div></li>
+    <li><div>שליחה לכל חבר דרך Brevo. אם נכשלה, ה־claim נמחק.</div></li>
+  </ol>
+</section>
+
+<!-- 7 -->
+<section id="data">
+  <div class="part"><span class="num">7</span><h2>מודל הנתונים</h2></div>
+  <p class="lead">11 טבלאות, ולכולן <code>household_id</code> עם <code>on delete cascade</code>. מחיקת משק בית מוחקת את כל מה ששייך לו.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>טבלה</th><th>מפתח ואילוצים</th><th>הערות</th></tr></thead>
+      <tbody>
+        <tr><td class="k"><code>households</code></td><td>PK <code>id</code>, <code>invite_code</code> unique, <code>max_members</code></td><td>חבר לא יכול לעדכן את <code>invite_code</code> ואת <code>max_members</code> (הרשאות עמודה).</td></tr>
+        <tr><td class="k"><code>household_members</code></td><td>PK <code>(household_id, user_id)</code>, <code>user_id</code> unique</td><td>משתמש אחד, משק בית אחד. נוצר רק דרך RPC.</td></tr>
+        <tr><td class="k"><code>categories</code></td><td>unique <code>(household_id, name)</code>, <code>kind</code> ∈ expense / saving / fund</td><td>גם קרנות (<code>fund_start</code>, <code>fund_opening</code>) וגם יעדים (<code>goal_amount</code>, <code>goal_due</code>). Single-table, בלי טבלאות ייעודיות.</td></tr>
+        <tr><td class="k"><code>transactions</code></td><td>partial unique <code>(household_id, external_id)</code>, אינדקס <code>(household_id, occurred_on desc)</code></td><td><code>amount numeric(12,2) &gt; 0</code>, הסימן נקבע לפי <code>type</code>. <code>source</code> ∈ manual / chat / bank.</td></tr>
+        <tr><td class="k"><code>recurring_incomes</code></td><td>FK ל־household</td><td>הכנסות קבועות ידניות.</td></tr>
+        <tr><td class="k"><code>chat_messages</code></td><td>אינדקס <code>(household_id, created_at desc)</code></td><td><code>role</code> ∈ user / bot.</td></tr>
+        <tr><td class="k"><code>bank_sync_settings</code></td><td>PK <code>household_id</code></td><td><code>public_key</code> (JWK), <code>credentials</code> (ciphertext), <code>agent_seen_at</code>.</td></tr>
+        <tr><td class="k"><code>bank_sync_runs</code></td><td><code>status</code> check, <code>months_back</code> בין 1 ל־12</td><td>תור, לוג ו־UI בטבלה אחת (ADR-06).</td></tr>
+        <tr><td class="k"><code>household_secrets</code></td><td>PK <code>household_id</code></td><td><code>claude_key</code> מוצפן, ו־<code>claude_key_hint</code> לתצוגה.</td></tr>
+        <tr><td class="k"><code>next_month_incomes</code></td><td>PK <code>(household_id, payer)</code></td><td>משלמים שהכנסה מהם בסוף חודש נרשמת ב־1 לחודש הבא.</td></tr>
+        <tr><td class="k"><code>report_log</code></td><td>PK <code>(household_id, period)</code></td><td>בלי מדיניות לחברים בכלל. רק <code>service_role</code> ניגש אליה.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">כסף נשמר כ־<code>numeric</code> ולא כ־<code>float</code>, ומעוגל ל־2 ספרות בכל נקודת כניסה. תאריכים הם <code>date</code> לפי שעון ישראל (<code>src/lib/dates.ts</code>), כדי שהוצאה ב־23:30 לא תיפול ליום הבא לפי UTC.</p>
+</section>
+
+<!-- 8 -->
+<section id="threats">
+  <div class="part"><span class="num">8</span><h2>מודל איומים</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>איום</th><th>בקרה</th><th>סיכון שנשאר</th></tr></thead>
+      <tbody>
+        <tr><td class="k">משק בית קורא נתונים של אחר</td><td>RLS על כל טבלה, 70 בדיקות מדיניות</td><td>באג בפונקציית <code>security definer</code></td></tr>
+        <tr><td class="k">גישה אנונימית</td><td><code>revoke</code> מ־anon, <code>proxy.ts</code> מפנה לכניסה, הרשמה סגורה ב־Supabase</td><td>נמוך</td></tr>
+        <tr><td class="k">ניחוש קוד הזמנה</td><td><code>max_members = 2</code> ב־RPC</td><td>משק בית עם חבר אחד חשוף עד שהשני מצטרף</td></tr>
+        <tr><td class="k">דליפה של המסד</td><td>פרטי בנק מוצפנים למפתח בבית, מפתח Claude מוצפן ב־<code>SECRETS_KEY</code></td><td>הנתונים הפיננסיים עצמם גלויים</td></tr>
+        <tr><td class="k">דליפה של משתני Vercel ושל המסד יחד</td><td>פרטי בנק עדיין סגורים</td><td>מפתחות Claude נפתחים, ו־<code>service_role</code> חשוף</td></tr>
+        <tr><td class="k">החלפת המפתח הציבורי של הסוכן</td><td>fingerprint מוצג ונבדק מול הסוכן</td><td>תלוי בכך שהמשתמש באמת משווה</td></tr>
+        <tr><td class="k">גישה למחשב בבית</td><td>BitLocker וסיסמת Windows (המלצה)</td><td><code>sync/.env</code> מחזיק סיסמת אפליקציה בטקסט גלוי</td></tr>
+        <tr><td class="k">הפעלה חיצונית של ה־cron</td><td><code>CRON_SECRET</code></td><td>נמוך</td></tr>
+        <tr><td class="k">XSS במייל</td><td><code>escapeHtml</code> על כל ערך, בלי סקריפטים</td><td>נמוך</td></tr>
+        <tr><td class="k">Clickjacking, downgrade</td><td>Security headers ב־<code>next.config.ts</code> (frame-ancestors, HSTS)</td><td>נמוך</td></tr>
+        <tr><td class="k">ניצול מכסות (Claude, Brevo)</td><td>BYOK לכל משק בית</td><td>אין rate limit על "שלח דוח עכשיו"</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note warn"><b>לא נעשה:</b> בדיקת חדירה חיצונית, ובדיקה של הגדרות לוחות הבקרה של Supabase, Vercel ו־GitHub.</div>
+</section>
+
+<!-- 9 -->
+<section id="quality">
+  <div class="part"><span class="num">9</span><h2>מאפייני איכות ותוכנית יציאה</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>מאפיין</th><th>איך מושג</th><th>מגבלה</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Latency</td><td>co-location (ADR-13), RSC בלי waterfall בלקוח, אימות JWT מקומי</td><td>cold start של פונקציה אחרי זמן שקט</td></tr>
+        <tr><td class="k">זמינות</td><td>Vercel ו־Supabase מנוהלים. האתר לא תלוי בסוכן</td><td>הסנכרון תלוי במחשב בבית ובאתרי הבנקים</td></tr>
+        <tr><td class="k">עלות</td><td>מסלולים חינמיים, BYOK ל־LLM</td><td>מגבלות המסלול החינמי</td></tr>
+        <tr><td class="k">Observability</td><td>פלט הסנכרון במסך המפתחים, לוגים של Vercel</td><td>אין ניטור שגיאות ואין התראות</td></tr>
+        <tr><td class="k">יכולת שינוי</td><td>לוגיקה בפונקציות טהורות עם בדיקות</td><td>בלי migrations (ADR-14)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>תוכנית יציאה מכל ספק</h3>
+  <ul class="plain">
+    <li><strong>מ־Supabase:</strong> <code>pg_dump</code> לכל Postgres. RLS ופונקציות SQL עובדות כמו שהן. העבודה האמיתית היא להחליף את <code>auth.uid()</code> ואת Auth (Auth.js, Clerk), ולכתוב שכבת גישה לסוכן במקום PostgREST.</li>
+    <li><strong>מ־Vercel:</strong> Next.js רץ על כל שרת Node או container. צריך להחליף את Cron (cron של מערכת או GitHub Actions) ואת ה־Git deploy.</li>
+    <li><strong>מ־Anthropic:</strong> הקריאה מבודדת ב־<code>bot.ts</code> וב־<code>sync/categorize.mjs</code>. ספק אחר עם structured output הוא שינוי מקומי.</li>
+    <li><strong>מ־Brevo:</strong> פונקציה אחת ב־<code>email.ts</code>.</li>
+  </ul>
+</section>
+
+<!-- 10 -->
+<section id="testing">
+  <div class="part"><span class="num">10</span><h2>אסטרטגיית בדיקות</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>שכבה</th><th>כלי</th><th>מה נבדק</th><th>היקף</th></tr></thead>
+      <tbody>
+        <tr><td class="k">לוגיקה עסקית</td><td>Vitest</td><td>חישובי החודש, קרנות, יעדים, מזומן, מגמות, תאריכים, fallback parser, הדוח, הצפנה</td><td>165 בדיקות</td></tr>
+        <tr><td class="k">תכנון הסנכרון</td><td>Vitest</td><td><code>plan.mjs</code>, <code>payee.mjs</code>, <code>logins.mjs</code>, <code>seal.mjs</code></td><td>בתוך ה־150</td></tr>
+        <tr><td class="k">מדיניות המסד</td><td>PGlite</td><td>הסכמה המלאה על Postgres בזיכרון, ופעולות כ־anon, כחבר וכזר</td><td>70 בדיקות</td></tr>
+        <tr><td class="k">LLM</td><td>eval ידני</td><td>סט הודעות מול המודל, לפני החלפת מודל</td><td>לפי צורך</td></tr>
+        <tr><td class="k">E2E</td><td>ידני בכרום</td><td>מסכים אחרי שינוי</td><td><span class="n">אין אוטומציה</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>הפירמידה מכוונת: ADR-05 ו־ADR-08 הוציאו את כל ההחלטות לפונקציות טהורות, כך שאפשר לבדוק את רוב הלוגיקה בלי רשת, בלי מסד ובלי בנק. החור הוא שכבת ה־UI וה־Server Actions, שנבדקות רק ידנית.</p>
+</section>
+
+<!-- 11 -->
+<section id="debt">
+  <div class="part"><span class="num">11</span><h2>חוב טכני ומסלול התפתחות</h2></div>
+
+  <h3>חוב ידוע במודל הנתונים</h3>
+  <ul class="plain">
+    <li><strong>זיכויים בכרטיס נרשמים כ־income.</strong> נכון יותר: הוצאה שלילית באותה קטגוריה, או <code>type = refund</code>. היום גם ההכנסות וגם ההוצאות מנופחות.</li>
+    <li><strong>העברות לחיסכון מדולגות בסנכרון.</strong> לכן הדוח מראה "נחסך ₪0". צריך לזהות העברה לחשבון חיסכון ולשייך אותה לקטגוריית החיסכון.</li>
+    <li><strong>הפרשה לקרן בלי תאריכי תוקף</strong> (ADR-05). צריך טבלת allocations עם <code>valid_from</code>.</li>
+    <li><strong>משיכה מיעד</strong> לא מורידה מהנצבר.</li>
+    <li><strong>מזומן לא עובר בין חודשים.</strong></li>
+  </ul>
+
+  <h3>מה ישתנה כשיהיו עוד משפחות</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>טריגר</th><th>מה לשנות</th></tr></thead>
+      <tbody>
+        <tr><td class="k">עוד מפתח בפרויקט</td><td>Supabase migrations במקום קובץ אחד, CI שמריץ את הבדיקות על כל PR, סביבת staging.</td></tr>
+        <tr><td class="k">10+ משפחות</td><td>rate limiting על actions יקרים, ניטור שגיאות (Sentry או דומה), התראה כשסנכרון נכשל, הזמנה במקום הרשמה, מחיקת חשבון ודף פרטיות.</td></tr>
+        <tr><td class="k">משפחות בלי מחשב</td><td>לארוז את הסוכן כקובץ הרצה, או להעביר אותו לשרת עם IP ביתי. כל אחת מהאפשרויות משנה את ADR-06 ו־ADR-07.</td></tr>
+        <tr><td class="k">אפליקציה native</td><td>API מתועד מעל PostgREST או Route Handlers, ו־push notifications.</td></tr>
+        <tr><td class="k">דרישות אבטחה גבוהות יותר</td><td>MFA ב־Auth, audit log לפעולות רגישות, נעילה נוספת למסך המפתחים, ואסימון במקום סיסמה ב־<code>sync/.env</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  נכתב מתוך הקוד של גרסה 0.15.0 (ענף <code>overnight</code>) ומתוך <code>WORKLOG.md</code>, שבו ההיסטוריה המלאה של כל החלטה.
+</footer>
+
+</div>
