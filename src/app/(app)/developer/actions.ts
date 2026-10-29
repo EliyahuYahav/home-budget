@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { BANKS, CARDS } from "@/lib/bank-sources";
 import { requireContext } from "@/lib/data";
+import { AGENT_ONLINE_WITHIN_MS } from "@/lib/sync-command";
 import { mergeLogins, parseSaved, stringifySaved } from "../../../../sync/logins.mjs";
 
 export interface SyncRun {
@@ -44,9 +45,6 @@ export interface SyncState {
   /** How much the household has stored, shown before a reset. */
   stored: { transactions: number; chatMessages: number };
 }
-
-// The agent reports in every 15 seconds.
-const ONLINE_WITHIN_MS = 60_000;
 
 export async function getSyncState(): Promise<SyncState> {
   const ctx = await requireContext();
@@ -92,7 +90,7 @@ export async function getSyncState(): Promise<SyncState> {
   return {
     schemaReady: true,
     publicKey: (settings.data?.public_key as JsonWebKey | null) ?? null,
-    agentOnline: seenAt !== null && Date.now() - Date.parse(seenAt) < ONLINE_WITHIN_MS,
+    agentOnline: seenAt !== null && Date.now() - Date.parse(seenAt) < AGENT_ONLINE_WITHIN_MS,
     agentSeenAt: seenAt,
     // The sealed details stay on the server; the browser has no use for them.
     logins: saved.logins.map(({ id, company, label, savedAt }) => ({ id, company, label, savedAt })),

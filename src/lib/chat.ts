@@ -4,6 +4,7 @@ import { formatILS, isCashCategory, summarizeMonth } from "./budget";
 import { resolveClaudeKey } from "./claude-key";
 import { getMonthData, type AppContext } from "./data";
 import { monthOf, shortDate, todayISO } from "./dates";
+import { describeLastRun, parseSyncCommand, planSyncRequest, type SyncCommand, type SyncSnapshot } from "./sync-command";
 import type { ChatMessage, ParsedEntry } from "./types";
 
 function describeEntry(entry: ParsedEntry, today: string): string {
@@ -24,6 +25,14 @@ export async function handleChatMessage(
 ): Promise<{ userMessage: ChatMessage; botMessage: ChatMessage; entryIds: string[] }> {
   const content = message.trim().slice(0, 500);
   if (!content) throw new Error("empty message");
+
+  // A sync command is answered here, before the month is read or Claude is asked: it costs
+  // nothing and does not depend on how the model reads the message.
+  const command = parseSyncCommand(content);
+  if (command) {
+    const reply = await answerSyncCommand(ctx, command);
+    return { ...(await saveExchange(ctx, content, reply)), entryIds: [] };
+  }
 
   const today = todayISO();
   const month = monthOf(today);
@@ -148,6 +157,50 @@ export async function handleChatMessage(
 
   if (!reply) reply = 'אפשר לכתוב לי הוצאה, למשל "סופר 230", או לשאול על החודש.';
 
+  return { ...(await saveExchange(ctx, content, reply)), entryIds };
+}
+
+/** Reads the sync state, queues a request when it should, and returns the bot's answer. */
+async function answerSyncCommand(ctx: AppContext, command: SyncCommand): Promise<string> {
+  const [settings, runs] = await Promise.all([
+    ctx.supabase
+      .from("bank_sync_settings")
+      .select("credentials, agent_seen_at")
+      .eq("household_id", ctx.household.id)
+      .maybeSingle(),
+    ctx.supabase
+      .from("bank_sync_runs")
+      .select("status, dry_run, output, created_at, finished_at")
+      .eq("household_id", ctx.household.id)
+      .order("created_at", { ascending: false })
+      .limit(1),
+  ]);
+  if (settings.error || runs.error) return "לא הצלחתי לקרוא את מצב הסנכרון. אפשר לנסות שוב או לבדוק במסך המפתחים.";
+
+  const snapshot: SyncSnapshot = {
+    agentSeenAt: settings.data?.agent_seen_at ?? null,
+    hasLogins: Boolean(settings.data?.credentials),
+    lastRun: (runs.data?.[0] as SyncSnapshot["lastRun"]) ?? null,
+  };
+  const now = Date.now();
+  if (command.kind === "status") return describeLastRun(snapshot, now);
+
+  const plan = planSyncRequest(snapshot, command.monthsBack, now);
+  if (!plan.queue) return plan.reply;
+  const { error } = await ctx.supabase.from("bank_sync_runs").insert({
+    household_id: ctx.household.id,
+    requested_by: ctx.userId,
+    dry_run: false,
+    ...(command.monthsBack > 1 ? { months_back: command.monthsBack } : {}),
+  });
+  return error ? "הבקשה לסנכרון לא נשמרה. אפשר לנסות שוב או לבקש ממסך המפתחים." : plan.reply;
+}
+
+async function saveExchange(
+  ctx: AppContext,
+  content: string,
+  reply: string,
+): Promise<{ userMessage: ChatMessage; botMessage: ChatMessage }> {
   // Explicit timestamps: rows inserted together would otherwise share one
   // created_at and could come back in either order.
   const now = Date.now();
@@ -162,5 +215,5 @@ export async function handleChatMessage(
 
   const userMessage = data.find((m) => m.role === "user") as ChatMessage;
   const botMessage = data.find((m) => m.role === "bot") as ChatMessage;
-  return { userMessage, botMessage, entryIds };
+  return { userMessage, botMessage };
 }

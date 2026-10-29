@@ -7,7 +7,7 @@ import { SendIcon } from "@/components/icons";
 import { dayLabel, todayISO } from "@/lib/dates";
 import type { ChatMessage } from "@/lib/types";
 
-const EXAMPLES = ["דלק 180 אתמול", "קיבלתי בונוס 1500", "כמה נשאר לנו החודש?"];
+const EXAMPLES = ["דלק 180 אתמול", "קיבלתי בונוס 1500", "כמה נשאר לנו החודש?", "סנכרן מהבנק"];
 
 const timeFormat = new Intl.DateTimeFormat("he-IL", {
   timeZone: "Asia/Jerusalem",
