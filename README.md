@@ -1,3 +1,17 @@
+# Home Budget
+
+**A household budget app for couples** (Next.js PWA). Log expenses by chatting with a bot ("groceries 230"), sync transactions from Israeli banks and credit cards, and track budget vs. actual per category, savings goals and monthly email reports.
+
+**Live:** https://home-budget-drab.vercel.app
+
+**Stack:** Next.js · React · TypeScript · Supabase (Postgres, Row Level Security) · Claude API · Vercel · Node.js sync agent (israeli-bank-scrapers) · Brevo
+
+**Highlights:** multi-household data isolation enforced in the database with RLS and covered by 42 permission tests; bank credentials encrypted in the browser with the home machine's public key; duplicate detection between bot entries and synced transactions; unit tests, database tests and type checks.
+
+*The full documentation below is in Hebrew.*
+
+---
+
 # תקציב הבית
 
 אפליקציה לניהול הוצאות, תקציב וחיסכון של הבית, לשני בני זוג. נפתחת בדפדפן וניתנת להתקנה על מסך הבית בטלפון (PWA).
