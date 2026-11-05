@@ -6,6 +6,10 @@
 
 **Stack:** Next.js · React · TypeScript · Supabase (Postgres, Row Level Security) · Claude API · Vercel · Node.js sync agent (israeli-bank-scrapers) · Brevo
 
+| Home | Expenses | Budget |
+|---|---|---|
+| ![Home](docs/screenshots/home.jpg) | ![Expenses](docs/screenshots/expenses.jpg) | ![Budget](docs/screenshots/budget.jpg) |
+
 **Highlights:** multi-household data isolation enforced in the database with RLS and covered by 42 permission tests; bank credentials encrypted in the browser with the home machine's public key; duplicate detection between bot entries and synced transactions; unit tests, database tests and type checks.
 
 *The full documentation below is in Hebrew.*
